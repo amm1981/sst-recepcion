@@ -1,0 +1,61 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Environment and local machine configuration
+.env
+.env.*
+!.env.example
+local.properties
+auth.json
+*.keystore
+*.jks
+*.pem
+*.key
+google-services.json
+
+# Logs and local diagnostics
+*.log
+*.tmp
+docssalud-*.png
+docssalud_db_device.sqlite*
+
+# Android / Gradle
+app/.gradle/
+app/build/
+app/**/build/
+app/local.properties
+app/captures/
+app/.idea/
+*.iml
+
+# Laravel
+web/backend/vendor/
+web/backend/.env
+web/backend/.env.*
+!web/backend/.env.example
+web/backend/.phpunit.cache/
+web/backend/.phpunit.result.cache
+web/backend/bootstrap/cache/*.php
+web/backend/public/build/
+web/backend/public/hot
+web/backend/public/storage
+web/backend/storage/logs/*.log
+web/backend/storage/framework/cache/data/*
+web/backend/storage/framework/sessions/*
+web/backend/storage/framework/views/*
+web/backend/storage/app/private/*
+!web/backend/storage/app/private/.gitignore
+web/backend/storage/app/public/*
+!web/backend/storage/app/public/.gitignore
+
+# Frontend
+web/frontend/node_modules/
+web/frontend/dist/
+web/frontend/dist-ssr/
+web/frontend/.env
+web/frontend/.env.*
+!web/frontend/.env.example
+web/frontend/*.local
