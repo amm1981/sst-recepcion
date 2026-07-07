@@ -49,6 +49,9 @@ interface SyncQueueDao {
     @Query("SELECT COUNT(*) FROM sync_queue WHERE status IN (:statuses)")
     suspend fun countByStatuses(statuses: List<String>): Int
 
+    @Query("SELECT COUNT(*) FROM sync_queue WHERE status IN ('PENDING', 'FAILED')")
+    suspend fun countPendingUpload(): Int
+
     @Insert
     suspend fun insert(item: SyncQueueEntity)
 

@@ -42,12 +42,8 @@ export function LoginPage() {
   return (
     <main className="login-screen">
       <form className="login-card grid" onSubmit={form.handleSubmit(onSubmit)}>
-        <div className="brand" style={{ padding: 0 }}>
-          <div className="brand-mark">DS</div>
-          <div>
-            <h1>DocsSalud</h1>
-            <div className="muted">Ingreso al sistema</div>
-          </div>
+        <div className="brand" style={{ padding: 0, flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+          <img src="/logotipo_docssalud.png" alt="DocsSalud Logotipo" style={{ height: '48px', objectFit: 'contain' }} />
         </div>
         <div className="field">
           <label htmlFor="email">Correo</label>

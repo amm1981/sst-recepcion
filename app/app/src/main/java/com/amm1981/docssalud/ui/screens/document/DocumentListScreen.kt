@@ -5,11 +5,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,12 +48,21 @@ fun DocumentListScreen(
         DocumentTab("Rechazados", "RECHAZADO")
     )
     val state by viewModel.state.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    LaunchedEffect(selectedTabIndex) {
+    LaunchedEffect(selectedTabIndex, state.isOnline) {
         viewModel.loadDocuments(tabs[selectedTabIndex].status)
     }
 
+    LaunchedEffect(state.message) {
+        state.message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.consumeMessage()
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Mis Documentos", color = Color.White) },
@@ -60,8 +72,14 @@ fun DocumentListScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.loadDocuments(tabs[selectedTabIndex].status) }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Actualizar", tint = Color.White)
+                    ConnectionIndicator(isOnline = state.isOnline)
+                    if (state.pendingUploadCount > 0) {
+                        PendingUploadAction(
+                            count = state.pendingUploadCount,
+                            isUploading = state.isUploading,
+                            isOnline = state.isOnline,
+                            onClick = { viewModel.sendPendingDocuments(tabs[selectedTabIndex].status) }
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = PrimaryGreen)
@@ -124,6 +142,67 @@ fun DocumentListScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun ConnectionIndicator(isOnline: Boolean) {
+    val label = if (isOnline) "Online" else "Offline"
+    val icon = if (isOnline) Icons.Default.Wifi else Icons.Default.WifiOff
+    val color = if (isOnline) Color(0xFFC8FACC) else Color(0xFFFFD6D6)
+
+    Row(
+        modifier = Modifier.padding(end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Icon(icon, contentDescription = label, tint = color, modifier = Modifier.size(17.dp))
+        Text(label, color = color, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun PendingUploadAction(
+    count: Int,
+    isUploading: Boolean,
+    isOnline: Boolean,
+    onClick: () -> Unit
+) {
+    Box(modifier = Modifier.padding(end = 4.dp)) {
+        IconButton(
+            onClick = onClick,
+            enabled = isOnline && !isUploading
+        ) {
+            if (isUploading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = Color.White,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    Icons.Default.CloudUpload,
+                    contentDescription = "Enviar pendientes",
+                    tint = if (isOnline) Color.White else Color.White.copy(alpha = 0.45f)
+                )
+            }
+        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = 6.dp, end = 4.dp)
+                .background(Color(0xFFE03131), CircleShape)
+                .sizeIn(minWidth = 18.dp, minHeight = 18.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = count.coerceAtMost(99).toString(),
+                color = Color.White,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 4.dp)
+            )
         }
     }
 }

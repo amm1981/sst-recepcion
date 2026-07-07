@@ -2,29 +2,57 @@ package com.amm1981.docssalud.ui.screens.document
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.amm1981.docssalud.data.connectivity.ConnectivityMonitor
 import com.amm1981.docssalud.data.repository.DocumentRepository
 import com.amm1981.docssalud.data.repository.DocumentUi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class DocumentListState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
+    val isOnline: Boolean = true,
+    val isUploading: Boolean = false,
+    val pendingUploadCount: Int = 0,
     val documents: List<DocumentUi> = emptyList(),
-    val error: String? = null
+    val error: String? = null,
+    val message: String? = null
 )
 
 @HiltViewModel
 class DocumentListViewModel @Inject constructor(
-    private val documentRepository: DocumentRepository
+    private val documentRepository: DocumentRepository,
+    private val connectivityMonitor: ConnectivityMonitor
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(DocumentListState())
     val state: StateFlow<DocumentListState> = _state.asStateFlow()
+
+    init {
+        observeConnectivity()
+        refreshPendingUploadCount()
+    }
+
+    private fun observeConnectivity() {
+        viewModelScope.launch {
+            connectivityMonitor.isOnline.collectLatest { isOnline ->
+                _state.value = _state.value.copy(isOnline = isOnline)
+            }
+        }
+    }
+
+    fun refreshPendingUploadCount() {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(
+                pendingUploadCount = documentRepository.pendingUploadCount()
+            )
+        }
+    }
 
     fun loadDocuments(status: String) {
         viewModelScope.launch {
@@ -38,15 +66,63 @@ class DocumentListViewModel @Inject constructor(
 
             val result = documentRepository.getDocuments(status)
             _state.value = result.fold(
-                onSuccess = { DocumentListState(documents = it, isRefreshing = false) },
+                onSuccess = {
+                    _state.value.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        documents = it,
+                        error = null
+                    )
+                },
                 onFailure = {
-                    DocumentListState(
+                    _state.value.copy(
+                        isLoading = false,
                         documents = localDocuments,
                         isRefreshing = false,
                         error = it.message ?: "No se pudieron cargar los documentos"
                     )
                 }
             )
+            refreshPendingUploadCount()
         }
+    }
+
+    fun sendPendingDocuments(currentStatus: String) {
+        viewModelScope.launch {
+            val pending = documentRepository.pendingUploadCount()
+            if (pending == 0) {
+                _state.value = _state.value.copy(message = "No hay documentos pendientes por enviar.")
+                return@launch
+            }
+            if (!_state.value.isOnline) {
+                _state.value = _state.value.copy(message = "Sin conexion. Los documentos siguen guardados en el equipo.")
+                return@launch
+            }
+
+            _state.value = _state.value.copy(isUploading = true, message = null)
+            val result = documentRepository.syncPendingDocuments()
+            val remaining = documentRepository.pendingUploadCount()
+            val message = result.fold(
+                onSuccess = { uploaded ->
+                    when {
+                        remaining == 0 -> "Documentos pendientes enviados."
+                        uploaded > 0 -> "Se enviaron $uploaded documentos. Quedan $remaining pendientes."
+                        else -> "No se pudieron enviar los documentos pendientes."
+                    }
+                },
+                onFailure = { it.message ?: "No se pudieron enviar los documentos pendientes." }
+            )
+
+            _state.value = _state.value.copy(
+                isUploading = false,
+                pendingUploadCount = remaining,
+                message = message
+            )
+            loadDocuments(currentStatus)
+        }
+    }
+
+    fun consumeMessage() {
+        _state.value = _state.value.copy(message = null)
     }
 }

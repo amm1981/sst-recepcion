@@ -14,6 +14,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.res.painterResource
+import com.amm1981.docssalud.R
 import com.amm1981.docssalud.ui.theme.PrimaryGreen
 
 @Composable
@@ -48,15 +50,14 @@ fun LoginScreen(
                 .padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Placeholder for Logo
-            Box(
+            Image(
+                painter = painterResource(id = R.drawable.logotipo_docssalud),
+                contentDescription = "DocsSalud Logotipo",
                 modifier = Modifier
-                    .size(120.dp)
-                    .background(PrimaryGreen, shape = RoundedCornerShape(16.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("DocsSalud", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-            }
+                    .fillMaxWidth()
+                    .height(100.dp),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+            )
 
             Spacer(modifier = Modifier.height(48.dp))
 

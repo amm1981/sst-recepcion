@@ -8,7 +8,6 @@ import {
   Settings,
   UserRound,
   UsersRound,
-  PlusSquare,
   Menu
 } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
@@ -61,13 +60,12 @@ export function AppLayout() {
   return (
     <div className={`app-shell ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark">
-            <PlusSquare size={20} fill="#ffffff" color="#047857" />
-          </div>
-          <div>
-            <div className="brand-title">DocsSalud</div>
-          </div>
+        <div className="brand" style={{ display: 'flex', justifyContent: 'center' }}>
+          {isCollapsed ? (
+            <img src="/icono_docssalud.png" alt="DocsSalud Icono" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+          ) : (
+            <img src="/logotipo_docssalud.png" alt="DocsSalud Logotipo" style={{ height: '32px', objectFit: 'contain' }} />
+          )}
         </div>
         <nav className="nav-list">
           {navItems

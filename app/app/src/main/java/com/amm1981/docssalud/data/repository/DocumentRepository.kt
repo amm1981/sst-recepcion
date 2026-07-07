@@ -158,6 +158,21 @@ class DocumentRepository @Inject constructor(
         }
     }
 
+    suspend fun pendingUploadCount(): Int = withContext(Dispatchers.IO) {
+        syncQueueDao.countPendingUpload()
+    }
+
+    suspend fun syncPendingDocuments(): Result<Int> = withContext(Dispatchers.IO) {
+        try {
+            val before = syncQueueDao.countPendingUpload()
+            processSyncQueue()
+            val after = syncQueueDao.countPendingUpload()
+            Result.success((before - after).coerceAtLeast(0))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getLocalDocuments(status: String): List<DocumentUi> = withContext(Dispatchers.IO) {
         if (status == "PENDIENTE") {
             syncQueueDao.getByStatuses(listOf("PENDING", "FAILED", "SYNCED")).map { it.toUi() }
