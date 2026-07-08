@@ -14,8 +14,8 @@ DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_DATABASE=docssalud
-DB_USERNAME=root
-DB_PASSWORD=5CY7ek$%bLn9
+DB_USERNAME=docssalud
+DB_PASSWORD=change_me
 ```
 
 Create the database and seed initial data:
@@ -42,3 +42,29 @@ npm run dev
 
 Frontend URL: `http://localhost:5173`
 Backend API: `http://localhost:8000/api`
+
+## PRD
+
+Dominio: `https://sst.agrocalera.app`
+
+Backend `.env`:
+
+```env
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://sst.agrocalera.app
+FRONTEND_URL=https://sst.agrocalera.app
+CORS_ALLOWED_ORIGINS=https://sst.agrocalera.app
+```
+
+Frontend `.env`:
+
+```env
+VITE_API_URL=https://sst.agrocalera.app/api
+```
+
+Android `app/local.properties`:
+
+```properties
+API_BASE_URL="https://sst.agrocalera.app/api/"
+```

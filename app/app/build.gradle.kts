@@ -14,7 +14,7 @@ val localPropertiesFile = rootProject.file("local.properties")
 if (localPropertiesFile.exists()) {
     localProperties.load(FileInputStream(localPropertiesFile))
 }
-val apiBaseUrl: String = localProperties.getProperty("API_BASE_URL") ?: "\"http://10.0.2.2:8000/api/\""
+val apiBaseUrl: String = localProperties.getProperty("API_BASE_URL") ?: "\"https://sst.agrocalera.app/api/\""
 
 android {
     namespace = "com.amm1981.docssalud"
