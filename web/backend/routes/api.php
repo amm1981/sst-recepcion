@@ -20,6 +20,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/profile', [ProfileController::class, 'update']);
 
     Route::get('/notifications', [\App\Http\Controllers\Api\NotificationController::class, 'index']);
+    Route::post('/notifications/read-all', [\App\Http\Controllers\Api\NotificationController::class, 'markAllAsRead']);
     Route::post('/notifications/{id}/read', [\App\Http\Controllers\Api\NotificationController::class, 'markAsRead']);
     Route::get('/notifications/unread-count', [\App\Http\Controllers\Api\NotificationController::class, 'unreadCount']);
 
@@ -37,6 +38,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/reports/summary', [ReportController::class, 'summary'])->middleware('permission:reports.view');
     Route::get('/reports/export/excel', [ReportController::class, 'exportExcel'])->middleware('permission:reports.view');
+    Route::get('/reports/export/pdf', [ReportController::class, 'exportPdf'])->middleware('permission:reports.view');
 
     Route::prefix('admin')->middleware('permission:admin.manage')->group(function () {
         Route::post('/workers/sync-employee-flow', [\App\Http\Controllers\Api\WorkerSyncController::class, 'trigger']);

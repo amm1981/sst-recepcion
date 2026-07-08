@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
-import { api } from '../api/client'
+import { api, getErrorMessage } from '../api/client'
 import type { User } from '../types'
 import { Mail, Phone, Clock, Monitor, MapPin, Eye, EyeOff, ShieldCheck } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -15,9 +15,9 @@ type ProfileForm = {
 }
 
 type PasswordForm = {
-  currentPassword: ''
-  newPassword: ''
-  confirmPassword: ''
+  currentPassword: string
+  newPassword: string
+  confirmPassword: string
 }
 
 export function ProfilePage() {
@@ -33,8 +33,8 @@ export function ProfilePage() {
       lastName: '',
       email: '',
       phone: '',
-      position: 'Administrador del Sistema',
-      management: 'Administración'
+      position: '',
+      management: '',
     },
   })
 
@@ -49,8 +49,8 @@ export function ProfilePage() {
         lastName,
         email: profile.data.email || '',
         phone: profile.data.phone || '',
-        position: 'Administrador del Sistema',
-        management: 'Administración'
+        position: profile.data.role?.name || 'Sin rol asignado',
+        management: `${profile.data.permissions?.length ?? 0} permisos activos`
       })
     }
   }, [profile.data, form])
@@ -85,6 +85,8 @@ export function ProfilePage() {
       return api.put('/profile', {
         name: profile.data?.name,
         email: profile.data?.email,
+        phone: profile.data?.phone,
+        current_password: values.currentPassword,
         password: values.newPassword,
       })
     },
@@ -93,7 +95,7 @@ export function ProfilePage() {
       alert('Contraseña actualizada correctamente')
     },
     onError: (error: any) => {
-      alert(error.message || 'Error al actualizar contraseña')
+      alert(getErrorMessage(error))
     }
   })
 
@@ -181,11 +183,11 @@ export function ProfilePage() {
                 <input {...form.register('phone')} />
               </div>
               <div className="field">
-                <label>Cargo</label>
+                <label>Rol</label>
                 <input {...form.register('position')} readOnly style={{ backgroundColor: '#f9fafb', color: '#6b7280' }} />
               </div>
               <div className="field">
-                <label>Área</label>
+                <label>Permisos</label>
                 <input {...form.register('management')} readOnly style={{ backgroundColor: '#f9fafb', color: '#6b7280' }} />
               </div>
             </div>

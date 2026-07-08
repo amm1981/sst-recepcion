@@ -22,13 +22,24 @@ class ProfileController extends Controller
             'email' => ['required', 'email', Rule::unique('users')->ignore($user->id)],
             'phone' => ['nullable', 'string', 'max:50'],
             'password' => ['nullable', 'string', 'min:8'],
+            'current_password' => ['required_with:password', 'nullable', 'string'],
         ]);
 
         if (! empty($data['password'])) {
+            if (! Hash::check((string) $data['current_password'], $user->password)) {
+                return response()->json([
+                    'message' => 'La contrasena actual no es correcta.',
+                    'errors' => [
+                        'current_password' => ['La contrasena actual no es correcta.'],
+                    ],
+                ], 422);
+            }
+
             $data['password'] = Hash::make($data['password']);
         } else {
             unset($data['password']);
         }
+        unset($data['current_password']);
 
         $user->update($data);
 

@@ -9,10 +9,12 @@ class NotificationController extends Controller
 {
     public function index(Request $request)
     {
-        $notifications = $request->user()->notifications()
-            ->orderBy('created_at', 'desc')
-            ->limit(20)
-            ->get();
+        $query = $request->user()->notifications()
+            ->orderBy('created_at', 'desc');
+
+        $notifications = $request->filled('per_page')
+            ? $query->paginate($request->integer('per_page', 25))
+            : $query->limit(20)->get();
 
         return response()->json($notifications);
     }
@@ -23,6 +25,15 @@ class NotificationController extends Controller
         $notification->update(['read_at' => now()]);
 
         return response()->json($notification);
+    }
+
+    public function markAllAsRead(Request $request)
+    {
+        $request->user()->notifications()
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json(['message' => 'Notificaciones marcadas como leidas.']);
     }
 
     public function unreadCount(Request $request)

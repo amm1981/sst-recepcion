@@ -20,6 +20,19 @@ class AuditLogController extends Controller
             $query->where('entity', 'like', '%' . $request->entity . '%');
         }
 
+        if ($request->filled('q')) {
+            $search = $request->string('q');
+            $query->where(function ($q) use ($search) {
+                $q->where('action', 'like', "%{$search}%")
+                    ->orWhere('entity', 'like', "%{$search}%")
+                    ->orWhere('ip_address', 'like', "%{$search}%")
+                    ->orWhereHas('user', function ($user) use ($search) {
+                        $user->where('name', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%");
+                    });
+            });
+        }
+
         return response()->json($query->paginate(20));
     }
 }

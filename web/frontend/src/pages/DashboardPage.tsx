@@ -2,21 +2,23 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { StatusBadge } from '../components/StatusBadge'
-import type { MedicalDocument, Paginated, Status } from '../types'
+import type { DocumentCounts, MedicalDocument, Paginated } from '../types'
 import { ClipboardList, FileText, CheckCircle2, XCircle, FilePlus2, MoreVertical } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
-
-const statuses: Status[] = ['PENDIENTE', 'RECEPCIONADO', 'REGISTRADO', 'RECHAZADO']
 
 export function DashboardPage() {
   const { user } = useAuth()
   const documents = useQuery({
-    queryKey: ['documents', 'dashboard'],
-    queryFn: async () => (await api.get<Paginated<MedicalDocument>>('/medical-documents?per_page=100')).data,
+    queryKey: ['documents', 'recent'],
+    queryFn: async () => (await api.get<Paginated<MedicalDocument>>('/medical-documents?per_page=6')).data,
+  })
+  const countsQuery = useQuery({
+    queryKey: ['medical-documents', 'counts'],
+    queryFn: async () => (await api.get<DocumentCounts>('/medical-documents/counts')).data,
   })
 
   const rows = documents.data?.data ?? []
-  const counts = Object.fromEntries(statuses.map((status) => [status, rows.filter((doc) => doc.status === status).length]))
+  const counts = countsQuery.data ?? { pending: 0, received: 0, registered: 0, rejected: 0 }
 
   return (
     <div>
@@ -59,7 +61,7 @@ export function DashboardPage() {
           <div className="stat-icon orange"><ClipboardList size={28} /></div>
           <div className="stat-info">
             <span className="stat-title">Pendientes</span>
-            <span className="stat-value">{counts['PENDIENTE'] ?? 0}</span>
+            <span className="stat-value">{counts.pending}</span>
             <span className="stat-desc">Documentos</span>
           </div>
         </div>
@@ -67,7 +69,7 @@ export function DashboardPage() {
           <div className="stat-icon blue"><FileText size={28} /></div>
           <div className="stat-info">
             <span className="stat-title">Recepcionados</span>
-            <span className="stat-value">{counts['RECEPCIONADO'] ?? 0}</span>
+            <span className="stat-value">{counts.received}</span>
             <span className="stat-desc">Documentos</span>
           </div>
         </div>
@@ -75,7 +77,7 @@ export function DashboardPage() {
           <div className="stat-icon green"><CheckCircle2 size={28} /></div>
           <div className="stat-info">
             <span className="stat-title">Registrados</span>
-            <span className="stat-value">{counts['REGISTRADO'] ?? 0}</span>
+            <span className="stat-value">{counts.registered}</span>
             <span className="stat-desc">Documentos</span>
           </div>
         </div>
@@ -83,7 +85,7 @@ export function DashboardPage() {
           <div className="stat-icon red"><XCircle size={28} /></div>
           <div className="stat-info">
             <span className="stat-title">Rechazados</span>
-            <span className="stat-value">{counts['RECHAZADO'] ?? 0}</span>
+            <span className="stat-value">{counts.rejected}</span>
             <span className="stat-desc">Documentos</span>
           </div>
         </div>

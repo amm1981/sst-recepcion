@@ -33,6 +33,47 @@ export type User = {
   permissions: string[]
 }
 
+export type NotificationItem = {
+  id: number
+  title: string
+  body?: string | null
+  read_at?: string | null
+  data?: Record<string, unknown> | null
+  created_at: string
+}
+
+export type AuditLog = {
+  id: number
+  action: string
+  entity: string
+  entity_id?: number | null
+  metadata?: Record<string, unknown> | null
+  ip_address?: string | null
+  created_at: string
+  user?: Pick<User, 'id' | 'name' | 'email'> | null
+}
+
+export type WorkerSyncLog = {
+  id: number
+  started_at?: string | null
+  finished_at?: string | null
+  status: string
+  total_received: number
+  created_count: number
+  updated_count: number
+  inactive_count: number
+  warning_count: number
+  error_count: number
+  error_message?: string | null
+}
+
+export type DocumentCounts = {
+  pending: number
+  received: number
+  registered: number
+  rejected: number
+}
+
 export type Management = {
   id: number
   name: string

@@ -166,4 +166,128 @@ class ReportController extends Controller
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
     }
+
+    public function exportPdf(Request $request)
+    {
+        $base = MedicalDocument::query();
+        $base = $this->applyFilters($base, $request);
+
+        $summary = $this->summaryData($base);
+        $lines = [
+            'DocsSalud SST - Reporte de documentos',
+            'Generado: ' . now()->format('d/m/Y H:i'),
+            'Dominio: ' . config('app.url'),
+            '',
+            'Resumen',
+            'Total documentos: ' . $summary['total'],
+            'Pendientes: ' . $summary['pending'],
+            'Recepcionados: ' . $summary['received'],
+            'Registrados: ' . $summary['registered'],
+            'Rechazados: ' . $summary['rejected'],
+            '',
+            'Resumen por tipo',
+        ];
+
+        foreach ($summary['by_type'] as $item) {
+            $lines[] = sprintf(
+                '%s | Total: %s | Pend: %s | Rec: %s | Reg: %s | Rech: %s',
+                $item->name,
+                $item->total,
+                $item->pendientes,
+                $item->recepcionados,
+                $item->registrados,
+                $item->rechazados
+            );
+        }
+
+        if ($summary['by_type']->isEmpty()) {
+            $lines[] = 'Sin resultados para los filtros seleccionados.';
+        }
+
+        $pdf = $this->buildSimplePdf($lines);
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="reporte_documentos.pdf"',
+        ]);
+    }
+
+    private function summaryData($base): array
+    {
+        $byType = (clone $base)
+            ->join('medical_document_types', 'medical_document_types.id', '=', 'medical_documents.medical_document_type_id')
+            ->select(
+                'medical_document_types.name',
+                DB::raw('count(*) as total'),
+                DB::raw("sum(case when medical_documents.status = 'PENDIENTE' then 1 else 0 end) as pendientes"),
+                DB::raw("sum(case when medical_documents.status = 'RECEPCIONADO' then 1 else 0 end) as recepcionados"),
+                DB::raw("sum(case when medical_documents.status = 'REGISTRADO' then 1 else 0 end) as registrados"),
+                DB::raw("sum(case when medical_documents.status = 'RECHAZADO' then 1 else 0 end) as rechazados")
+            )
+            ->groupBy('medical_document_types.name')
+            ->get();
+
+        return [
+            'total' => (clone $base)->count(),
+            'pending' => (clone $base)->where('medical_documents.status', 'PENDIENTE')->count(),
+            'received' => (clone $base)->where('medical_documents.status', 'RECEPCIONADO')->count(),
+            'registered' => (clone $base)->where('medical_documents.status', 'REGISTRADO')->count(),
+            'rejected' => (clone $base)->where('medical_documents.status', 'RECHAZADO')->count(),
+            'by_type' => $byType,
+        ];
+    }
+
+    private function buildSimplePdf(array $lines): string
+    {
+        $content = [
+            'BT',
+            '/F1 16 Tf',
+            '40 800 Td',
+            '20 TL',
+        ];
+
+        foreach (array_slice($lines, 0, 46) as $index => $line) {
+            if ($index === 3) {
+                $content[] = '/F1 10 Tf';
+                $content[] = '14 TL';
+            }
+            $content[] = '(' . $this->escapePdfText($line) . ') Tj';
+            $content[] = 'T*';
+        }
+
+        $content[] = 'ET';
+        $stream = implode("\n", $content);
+
+        $objects = [
+            '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
+            '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
+            '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >> endobj',
+            "4 0 obj << /Length " . strlen($stream) . " >> stream\n{$stream}\nendstream endobj",
+            '5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
+        ];
+
+        $pdf = "%PDF-1.4\n";
+        $offsets = [0];
+        foreach ($objects as $object) {
+            $offsets[] = strlen($pdf);
+            $pdf .= $object . "\n";
+        }
+
+        $xrefOffset = strlen($pdf);
+        $pdf .= "xref\n0 " . (count($objects) + 1) . "\n";
+        $pdf .= "0000000000 65535 f \n";
+        foreach (array_slice($offsets, 1) as $offset) {
+            $pdf .= str_pad((string) $offset, 10, '0', STR_PAD_LEFT) . " 00000 n \n";
+        }
+        $pdf .= "trailer << /Size " . (count($objects) + 1) . " /Root 1 0 R >>\n";
+        $pdf .= "startxref\n{$xrefOffset}\n%%EOF";
+
+        return $pdf;
+    }
+
+    private function escapePdfText(string $value): string
+    {
+        $normalized = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value) ?: $value;
+        return str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $normalized);
+    }
 }

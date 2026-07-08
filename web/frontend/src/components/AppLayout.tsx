@@ -2,7 +2,9 @@ import {
   BarChart3,
   Bell,
   ChevronDown,
+  CheckCheck,
   ClipboardList,
+  ExternalLink,
   Home,
   LogOut,
   Settings,
@@ -12,9 +14,10 @@ import {
 } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import { useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useEffect, useRef, useState } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
+import type { NotificationItem } from '../types'
 
 const navItems = [
   { to: '/dashboard', label: 'Inicio', icon: Home },
@@ -29,14 +32,30 @@ export function AppLayout() {
   const navigate = useNavigate()
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
-
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const notificationsRef = useRef<HTMLDivElement>(null)
+  const profileRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      const target = event.target as Node
+      if (notificationsRef.current && !notificationsRef.current.contains(target)) {
+        setIsNotificationsOpen(false)
+      }
+      if (profileRef.current && !profileRef.current.contains(target)) {
+        setIsProfileMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const { data: notifications = [], refetch: refetchNotifications } = useQuery({
     queryKey: ['notifications'],
     queryFn: async () => {
       const res = await api.get('/notifications')
-      return res.data as { id: number; title: string; body: string; read_at: string | null; created_at: string }[]
+      return res.data as NotificationItem[]
     },
     refetchInterval: 60000, // Poll every minute
   })
@@ -48,6 +67,13 @@ export function AppLayout() {
     onSuccess: () => {
       refetchNotifications()
     }
+  })
+
+  const markAllAsRead = useMutation({
+    mutationFn: async () => api.post('/notifications/read-all'),
+    onSuccess: () => {
+      refetchNotifications()
+    },
   })
 
   const unreadCount = notifications.filter(n => !n.read_at).length
@@ -86,7 +112,7 @@ export function AppLayout() {
             </button>
           </div>
           <div className="header-actions">
-            <div className="dropdown-container">
+            <div className="dropdown-container" ref={notificationsRef}>
               <div className="header-bell" title="Notificaciones" onClick={() => setIsNotificationsOpen(!isNotificationsOpen)} style={{ cursor: 'pointer' }}>
                 <Bell size={22} strokeWidth={2} />
                 {unreadCount > 0 && <div className="badge-dot">{unreadCount}</div>}
@@ -94,8 +120,11 @@ export function AppLayout() {
 
               {isNotificationsOpen && (
                 <div className="dropdown-menu" style={{ right: 0, top: '100%', marginTop: 8, padding: '8px 0', width: '300px', maxHeight: '400px', overflowY: 'auto' }}>
-                  <div style={{ padding: '8px 16px', borderBottom: '1px solid #e5e7eb', fontWeight: 600 }}>
-                    Notificaciones
+                  <div style={{ padding: '8px 16px', borderBottom: '1px solid #e5e7eb', fontWeight: 600, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Notificaciones</span>
+                    <button type="button" onClick={() => markAllAsRead.mutate()} disabled={unreadCount === 0 || markAllAsRead.isPending} title="Marcar todas como leidas">
+                      <CheckCheck size={16} />
+                    </button>
                   </div>
                   {notifications.length === 0 ? (
                     <div style={{ padding: '16px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>No tienes notificaciones</div>
@@ -119,11 +148,18 @@ export function AppLayout() {
                       </div>
                     ))
                   )}
+                  <button
+                    type="button"
+                    onClick={() => { setIsNotificationsOpen(false); navigate('/notifications') }}
+                    style={{ width: '100%', justifyContent: 'center', borderTop: '1px solid #e5e7eb', color: '#047857', fontWeight: 600 }}
+                  >
+                    <ExternalLink size={16} /> Ver historial completo
+                  </button>
                 </div>
               )}
             </div>
             
-            <div className="dropdown-container">
+            <div className="dropdown-container" ref={profileRef}>
               <div className="header-profile" onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)} style={{ cursor: 'pointer' }}>
                 <img src={`https://ui-avatars.com/api/?name=${user?.name || 'US'}&background=e5e7eb&color=111827&bold=true`} alt="Avatar" className="avatar" />
                 <div className="header-profile-info">

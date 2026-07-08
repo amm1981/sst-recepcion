@@ -3,7 +3,7 @@ import { api } from '../api/client'
 import { Link } from 'react-router-dom'
 import { FilterSelect } from '../components/FilterSelect'
 import { FileText, Clock, Inbox, CheckCircle2, XCircle, FileSpreadsheet, Upload } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, LineChart, Line } from 'recharts'
 import { useMemo, useState } from 'react'
 
 type ReportSummary = {
@@ -77,19 +77,26 @@ export function ReportsPage() {
     setActiveFilters({ ...filters })
   }
 
-  const handleExportPdf = () => {
-    window.print()
+  const handleExportPdf = async () => {
+    try {
+      const params = buildReportParams(activeFilters)
+      const response = await api.get(`/reports/export/pdf?${params.toString()}`, { responseType: 'blob' })
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', 'reporte_documentos.pdf')
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('Error exporting pdf', e)
+    }
   }
 
   const handleExportExcel = async () => {
     try {
-      const params = new URLSearchParams()
-      if (activeFilters.from) params.append('from', activeFilters.from)
-      if (activeFilters.to) params.append('to', activeFilters.to)
-      if (activeFilters.type_id) params.append('type_id', activeFilters.type_id)
-      if (activeFilters.status) params.append('status', activeFilters.status)
-      if (activeFilters.management_id) params.append('management_id', activeFilters.management_id)
-      if (activeFilters.sector_id) params.append('sector_id', activeFilters.sector_id)
+      const params = buildReportParams(activeFilters)
       
       const response = await api.get(`/reports/export/excel?${params.toString()}`, { responseType: 'blob' })
       const url = window.URL.createObjectURL(new Blob([response.data]))
@@ -104,6 +111,14 @@ export function ReportsPage() {
       console.error('Error exporting excel', e)
     }
   }
+
+  const monthlyData = useMemo(
+    () => report.data?.monthly.map(item => ({
+      month: item.month,
+      total: Number(item.total),
+    })) ?? [],
+    [report.data],
+  )
 
   return (
     <div>
@@ -238,6 +253,23 @@ export function ReportsPage() {
           </div>
         </div>
         <div className="report-panel">
+          <h2>Tendencia mensual</h2>
+          <div className="report-panel-content">
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={monthlyData} margin={{ top: 30, right: 30, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 13, fill: '#6b7280' }} dy={10} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 13, fill: '#6b7280' }} allowDecimals={false} />
+                <Tooltip cursor={{ stroke: '#d1d5db' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} />
+                <Line type="monotone" dataKey="total" stroke="#047857" strokeWidth={3} dot={{ r: 4, fill: '#047857' }} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid hero" style={{ marginTop: 24 }}>
+        <div className="report-panel">
           <h2>Resumen por Tipo</h2>
           <div className="report-panel-content" style={{ justifyContent: 'flex-start', overflow: 'auto' }}>
             <table className="report-table">
@@ -279,4 +311,22 @@ export function ReportsPage() {
       </div>
     </div>
   )
+}
+
+function buildReportParams(filters: {
+  from: string
+  to: string
+  type_id: string
+  status: string
+  management_id: string
+  sector_id: string
+}) {
+  const params = new URLSearchParams()
+  if (filters.from) params.append('from', filters.from)
+  if (filters.to) params.append('to', filters.to)
+  if (filters.type_id) params.append('type_id', filters.type_id)
+  if (filters.status) params.append('status', filters.status)
+  if (filters.management_id) params.append('management_id', filters.management_id)
+  if (filters.sector_id) params.append('sector_id', filters.sector_id)
+  return params
 }

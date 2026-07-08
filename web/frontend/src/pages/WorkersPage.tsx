@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
-import { ChevronLeft, ChevronRight, Edit, Plus, Trash2, Upload, Filter, MoreVertical } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Edit, Plus, Trash2, Upload, MoreVertical } from 'lucide-react'
 import { useMemo, useState, useRef, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link } from 'react-router-dom'
@@ -50,6 +50,7 @@ export function WorkersPage() {
   const { can } = useAuth()
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState<Worker | null>(null)
+  const [deleting, setDeleting] = useState<Worker | null>(null)
   const [showImport, setShowImport] = useState(false)
   
   const [q, setQ] = useState('')
@@ -80,7 +81,10 @@ export function WorkersPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => api.delete(`/workers/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['workers'] }),
+    onSuccess: () => {
+      setDeleting(null)
+      queryClient.invalidateQueries({ queryKey: ['workers'] })
+    },
   })
 
   const columns = useMemo<ColumnDef<Worker>[]>(
@@ -103,7 +107,7 @@ export function WorkersPage() {
           can('workers.manage') ? (
             <ActionMenu 
               onEdit={() => setEditing(row.original)}
-              onDelete={() => deleteMutation.mutate(row.original.id)}
+              onDelete={() => setDeleting(row.original)}
             />
           ) : null,
       },
@@ -192,9 +196,6 @@ export function WorkersPage() {
                 />
               </div>
             </div>
-            <button className="btn secondary" style={{ fontWeight: 600, color: '#4b5563', padding: '8px 16px', borderRadius: 8 }}>
-              <Filter size={18} /> Filtros
-            </button>
           </div>
         </div>
 
@@ -253,6 +254,19 @@ export function WorkersPage() {
       </div>
       
       {editing ? <WorkerModal worker={editing.id ? editing : null} onClose={() => setEditing(null)} /> : null}
+      {deleting ? (
+        <Modal title="Confirmar eliminacion" onClose={() => setDeleting(null)}>
+          <p style={{ marginTop: 0 }}>
+            Esta accion eliminara al trabajador <strong>{deleting.first_name} {deleting.last_name}</strong>.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            <button className="btn secondary" type="button" onClick={() => setDeleting(null)}>Cancelar</button>
+            <button className="btn danger" type="button" onClick={() => deleteMutation.mutate(deleting.id)} disabled={deleteMutation.isPending}>
+              <Trash2 size={18} /> Eliminar
+            </button>
+          </div>
+        </Modal>
+      ) : null}
       {showImport ? <ImportModal onClose={() => setShowImport(false)} /> : null}
     </div>
   )

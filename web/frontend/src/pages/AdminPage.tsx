@@ -1,29 +1,33 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
-import { Edit, Plus, Trash2, Users, ShieldCheck, FileText, Building2, Network, Truck, ChevronRight } from 'lucide-react'
+import { Edit, Plus, Trash2, Users, ShieldCheck, FileText, Building2, Network, Truck, ChevronRight, History, RefreshCw, KeyRound } from 'lucide-react'
 import { useMemo, useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
-import { api } from '../api/client'
+import { api, getErrorMessage } from '../api/client'
 import { DataTable } from '../components/DataTable'
 import { Modal } from '../components/Modal'
 import { SearchBar } from '../components/SearchBar'
 import { Link } from 'react-router-dom'
-import type { Paginated, Permission, Role } from '../types'
+import type { AuditLog, Paginated, Permission, Role, WorkerSyncLog } from '../types'
 
 type AdminRecord = Record<string, unknown> & { id: number; name?: string; code?: string; email?: string }
 
 const resources = [
   { key: 'users', label: 'Usuarios', icon: Users, desc: 'Gestionar usuarios del sistema y sus accesos.' },
   { key: 'roles', label: 'Roles', icon: ShieldCheck, desc: 'Definir roles y responsabilidades del sistema.' },
+  { key: 'permissions', label: 'Permisos', icon: KeyRound, desc: 'Gestionar permisos disponibles para los roles.' },
   { key: 'document-types', label: 'Tipos de Documento', icon: FileText, desc: 'Configurar los tipos de documentos disponibles.' },
   { key: 'managements', label: 'Gerencias', icon: Building2, desc: 'Gestionar las gerencias de la organización.' },
   { key: 'sectors', label: 'Sectores', icon: Network, desc: 'Gestionar los sectores de la organización.' },
   { key: 'delivery-relations', label: 'Relaciones Entrega', icon: Truck, desc: 'Configurar las relaciones de entrega de documentos.' },
+  { key: 'audit-logs', label: 'Auditoria', icon: History, desc: 'Consultar acciones y trazabilidad del sistema.' },
+  { key: 'worker-sync', label: 'Data Maestra', icon: RefreshCw, desc: 'Sincronizar trabajadores desde EmployeeFlow.' },
 ]
 
 export function AdminPage() {
   const [resource, setResource] = useState(resources[0].key)
   const [editing, setEditing] = useState<AdminRecord | null>(null)
+  const [deleting, setDeleting] = useState<AdminRecord | null>(null)
   
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -41,11 +45,20 @@ export function AdminPage() {
   const queryClient = useQueryClient()
   const records = useQuery({
     queryKey: ['admin', resource, debouncedSearch],
-    queryFn: async () => (await api.get<Paginated<AdminRecord>>(`/admin/${resource}?search=${encodeURIComponent(debouncedSearch)}`)).data,
+    queryFn: async () => {
+      const params = resource === 'audit-logs'
+        ? `q=${encodeURIComponent(debouncedSearch)}`
+        : `search=${encodeURIComponent(debouncedSearch)}`
+      return (await api.get<Paginated<AdminRecord>>(`/admin/${resource}?${params}`)).data
+    },
+    enabled: resource !== 'worker-sync',
   })
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => api.delete(`/admin/${resource}/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin', resource] }),
+    onSuccess: () => {
+      setDeleting(null)
+      queryClient.invalidateQueries({ queryKey: ['admin', resource] })
+    },
   })
   const columns = useMemo<ColumnDef<AdminRecord>[]>(() => {
     const defaultActions = {
@@ -53,9 +66,20 @@ export function AdminPage() {
       cell: ({ row }: any) => (
         <div className="header-actions">
           <button className="icon-btn secondary" type="button" onClick={() => setEditing(row.original)} title="Editar"><Edit size={17} /></button>
-          <button className="icon-btn secondary" type="button" onClick={() => deleteMutation.mutate(row.original.id)} title="Eliminar"><Trash2 size={17} /></button>
+          <button className="icon-btn secondary" type="button" onClick={() => setDeleting(row.original)} title="Eliminar"><Trash2 size={17} /></button>
         </div>
       ),
+    }
+
+    if (resource === 'audit-logs') {
+      return [
+        { header: 'Fecha', cell: ({ row }) => new Date(String(row.original.created_at)).toLocaleString('es-PE') },
+        { header: 'Usuario', cell: ({ row }) => (row.original.user as AuditLog['user'])?.name ?? 'Sistema' },
+        { header: 'Accion', cell: ({ row }) => String(row.original.action ?? '') },
+        { header: 'Entidad', cell: ({ row }) => String(row.original.entity ?? '') },
+        { header: 'ID', cell: ({ row }) => String(row.original.entity_id ?? '-') },
+        { header: 'IP', cell: ({ row }) => String(row.original.ip_address ?? '-') },
+      ]
     }
 
     if (resource === 'users') {
@@ -162,17 +186,118 @@ export function AdminPage() {
             value={searchQuery}
             onChange={setSearchQuery}
           />
-          <button className="btn" type="button" onClick={() => setEditing({ id: 0 })}>
-            <Plus size={18} /> Nuevo {activeResource?.label.replace(/s$/, '').replace(/es$/, '')}
-          </button>
+          {!['audit-logs', 'worker-sync'].includes(resource) ? (
+            <button className="btn" type="button" onClick={() => setEditing({ id: 0 })}>
+              <Plus size={18} /> Nuevo {activeResource?.label.replace(/s$/, '').replace(/es$/, '')}
+            </button>
+          ) : null}
         </div>
       </div>
 
-      <DataTable data={records.data?.data ?? []} columns={columns} />
+      {resource === 'worker-sync' ? (
+        <WorkerSyncPanel />
+      ) : (
+        <DataTable data={records.data?.data ?? []} columns={columns} />
+      )}
       {editing ? (
         <AdminModal resource={resource} record={editing.id ? editing : null} onClose={() => setEditing(null)} />
       ) : null}
+      {deleting ? (
+        <ConfirmDeleteModal
+          record={deleting}
+          resourceLabel={activeResource?.label ?? 'registro'}
+          onCancel={() => setDeleting(null)}
+          onConfirm={() => deleteMutation.mutate(deleting.id)}
+          isPending={deleteMutation.isPending}
+        />
+      ) : null}
     </div>
+  )
+}
+
+function WorkerSyncPanel() {
+  const queryClient = useQueryClient()
+  const latest = useQuery({
+    queryKey: ['admin', 'worker-sync', 'latest'],
+    queryFn: async () => (await api.get<WorkerSyncLog>('/admin/workers/sync-employee-flow/latest')).data,
+    retry: false,
+  })
+  const syncMutation = useMutation({
+    mutationFn: async () => (await api.post<{ message: string; log: WorkerSyncLog }>('/admin/workers/sync-employee-flow')).data,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'worker-sync', 'latest'] })
+      await queryClient.invalidateQueries({ queryKey: ['workers'] })
+    },
+  })
+
+  const log = syncMutation.data?.log ?? latest.data
+
+  return (
+    <div className="table-card" style={{ padding: 24 }}>
+      <div className="table-header" style={{ padding: 0, marginBottom: 16 }}>
+        <div>
+          <h2>Sincronizacion EmployeeFlow</h2>
+          <p className="muted-text">Actualiza trabajadores, gerencias y sectores desde la fuente maestra.</p>
+        </div>
+        <button className="btn" type="button" onClick={() => syncMutation.mutate()} disabled={syncMutation.isPending}>
+          <RefreshCw size={18} /> {syncMutation.isPending ? 'Sincronizando...' : 'Sincronizar ahora'}
+        </button>
+      </div>
+      {syncMutation.error ? <div className="error">{getErrorMessage(syncMutation.error)}</div> : null}
+      {log ? (
+        <div className="grid reports-stats">
+          <SyncMetric label="Estado" value={log.status} />
+          <SyncMetric label="Recibidos" value={log.total_received} />
+          <SyncMetric label="Creados" value={log.created_count} />
+          <SyncMetric label="Actualizados" value={log.updated_count} />
+          <SyncMetric label="Inactivados" value={log.inactive_count} />
+          <SyncMetric label="Errores" value={log.error_count} />
+        </div>
+      ) : (
+        <div className="table-empty">No hay sincronizaciones previas.</div>
+      )}
+      {log?.finished_at ? <p className="muted-text">Ultima finalizacion: {new Date(log.finished_at).toLocaleString('es-PE')}</p> : null}
+      {log?.error_message ? <div className="error">{log.error_message}</div> : null}
+    </div>
+  )
+}
+
+function SyncMetric({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="card stat-card" style={{ padding: 16 }}>
+      <div className="stat-info">
+        <span className="stat-title">{label}</span>
+        <span className="stat-value" style={{ fontSize: 24 }}>{value}</span>
+      </div>
+    </div>
+  )
+}
+
+function ConfirmDeleteModal({
+  record,
+  resourceLabel,
+  onCancel,
+  onConfirm,
+  isPending,
+}: {
+  record: AdminRecord
+  resourceLabel: string
+  onCancel: () => void
+  onConfirm: () => void
+  isPending: boolean
+}) {
+  return (
+    <Modal title="Confirmar eliminacion" onClose={onCancel}>
+      <p style={{ marginTop: 0 }}>
+        Esta accion eliminara el registro de {resourceLabel.toLowerCase()} <strong>{record.name ?? record.email ?? record.code ?? record.id}</strong>.
+      </p>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+        <button className="btn secondary" type="button" onClick={onCancel}>Cancelar</button>
+        <button className="btn danger" type="button" onClick={onConfirm} disabled={isPending}>
+          <Trash2 size={18} /> Eliminar
+        </button>
+      </div>
+    </Modal>
   )
 }
 
