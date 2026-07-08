@@ -8,7 +8,7 @@ import { getErrorMessage } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 
 const schema = z.object({
-  email: z.string().email('Ingrese un correo valido'),
+  user: z.string().min(1, 'Ingrese su usuario'),
   password: z.string().min(1, 'Ingrese su password'),
 })
 
@@ -21,7 +21,7 @@ export function LoginPage() {
   const location = useLocation()
   const form = useForm<LoginForm>({
     resolver: zodResolver(schema),
-    defaultValues: { email: 'admin@docssalud.test', password: 'Password123' },
+    defaultValues: { user: '', password: '' },
   })
 
   if (user) {
@@ -31,7 +31,7 @@ export function LoginPage() {
   async function onSubmit(values: LoginForm) {
     setError('')
     try {
-      await login(values.email, values.password)
+      await login(values.user, values.password)
       const target = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? '/dashboard'
       navigate(target, { replace: true })
     } catch (submitError) {
@@ -43,12 +43,12 @@ export function LoginPage() {
     <main className="login-screen">
       <form className="login-card grid" onSubmit={form.handleSubmit(onSubmit)}>
         <div className="brand" style={{ padding: 0, flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-          <img src="/logotipo_docssalud.png" alt="DocsSalud Logotipo" style={{ height: '48px', objectFit: 'contain' }} />
+          <img src="/logotipo_docssalud.png" alt="DocsSalud Logotipo" style={{ height: '76px', objectFit: 'contain' }} />
         </div>
         <div className="field">
-          <label htmlFor="email">Correo</label>
-          <input id="email" autoComplete="email" {...form.register('email')} />
-          {form.formState.errors.email ? <span className="error">{form.formState.errors.email.message}</span> : null}
+          <label htmlFor="user">Usuario</label>
+          <input id="user" autoComplete="username" {...form.register('user')} />
+          {form.formState.errors.user ? <span className="error">{form.formState.errors.user.message}</span> : null}
         </div>
         <div className="field">
           <label htmlFor="password">Password</label>

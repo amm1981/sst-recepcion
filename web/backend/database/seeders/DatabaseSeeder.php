@@ -50,18 +50,21 @@ class DatabaseSeeder extends Seeder
         $sstRole = Role::where('code', 'SST')->first();
 
         User::updateOrCreate(['email' => 'admin@docssalud.test'], [
+            'user' => 'admin',
             'name' => 'Administrador DocsSalud',
             'password' => Hash::make('Password123'),
             'role_id' => $adminRole->id,
             'is_active' => true,
         ]);
         User::updateOrCreate(['email' => 'rrhh@docssalud.test'], [
+            'user' => 'rrhh',
             'name' => 'Usuario RRHH',
             'password' => Hash::make('Password123'),
             'role_id' => $rrhhRole->id,
             'is_active' => true,
         ]);
         User::updateOrCreate(['email' => 'sst@docssalud.test'], [
+            'user' => 'sst',
             'name' => 'Usuario SST',
             'password' => Hash::make('Password123'),
             'role_id' => $sstRole->id,

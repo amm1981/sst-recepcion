@@ -33,10 +33,10 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun login(email: String, pass: String) {
+    fun login(user: String, pass: String) {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
-            val result = authRepository.login(email, pass)
+            val result = authRepository.login(user, pass)
             if (result.isSuccess) {
                 // Sincronizar catálogos y trabajadores después de loguearse exitosamente
                 val syncResult = syncRepository.syncAll(forceWorkers = true)

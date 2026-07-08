@@ -5,7 +5,7 @@ import type { PermissionCode, User } from '../types'
 type AuthContextValue = {
   user: User | null
   loading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (user: string, password: string) => Promise<void>
   logout: () => Promise<void>
   can: (permission: PermissionCode | string) => boolean
 }
@@ -34,9 +34,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
-      login: async (email, password) => {
+      login: async (user, password) => {
         const response = await api.post<{ token: string; user: User }>('/auth/login', {
-          email,
+          user,
           password,
           device_name: 'DocsSalud Web',
         })

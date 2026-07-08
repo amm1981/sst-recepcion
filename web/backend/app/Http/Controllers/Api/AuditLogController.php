@@ -10,7 +10,7 @@ class AuditLogController extends Controller
 {
     public function index(Request $request)
     {
-        $query = AuditLog::with('user:id,name,email')->latest();
+        $query = AuditLog::with('user:id,user,name,email')->latest();
 
         if ($request->filled('action')) {
             $query->where('action', $request->action);
@@ -28,6 +28,7 @@ class AuditLogController extends Controller
                     ->orWhere('ip_address', 'like', "%{$search}%")
                     ->orWhereHas('user', function ($user) use ($search) {
                         $user->where('name', 'like', "%{$search}%")
+                            ->orWhere('user', 'like', "%{$search}%")
                             ->orWhere('email', 'like', "%{$search}%");
                     });
             });

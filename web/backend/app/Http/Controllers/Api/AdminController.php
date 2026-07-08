@@ -36,6 +36,7 @@ class AdminController extends Controller
             $query->where(function ($q) use ($search, $resource) {
                 if ($resource === 'users') {
                     $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('user', 'like', "%{$search}%")
                       ->orWhere('email', 'like', "%{$search}%");
                 } else {
                     $q->where('name', 'like', "%{$search}%")
@@ -114,6 +115,7 @@ class AdminController extends Controller
     {
         return match ($resource) {
             'users' => $request->validate([
+                'user' => ['required', 'string', 'max:191', 'alpha_dash:ascii', Rule::unique('users', 'user')->ignore($id)],
                 'name' => ['required', 'string', 'max:255'],
                 'email' => ['required', 'email', Rule::unique('users')->ignore($id)],
                 'phone' => ['nullable', 'string', 'max:50'],

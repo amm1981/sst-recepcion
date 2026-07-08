@@ -26,6 +26,7 @@ export type Permission = {
 
 export type User = {
   id: number
+  user: string
   name: string
   email: string
   phone?: string | null

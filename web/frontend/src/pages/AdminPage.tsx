@@ -10,7 +10,7 @@ import { SearchBar } from '../components/SearchBar'
 import { Link } from 'react-router-dom'
 import type { AuditLog, Paginated, Permission, Role, WorkerSyncLog } from '../types'
 
-type AdminRecord = Record<string, unknown> & { id: number; name?: string; code?: string; email?: string }
+type AdminRecord = Record<string, unknown> & { id: number; user?: string; name?: string; code?: string; email?: string }
 
 const resources = [
   { key: 'users', label: 'Usuarios', icon: Users, desc: 'Gestionar usuarios del sistema y sus accesos.' },
@@ -93,6 +93,7 @@ export function AdminPage() {
             </div>
           )
         },
+        { header: 'Usuario', accessorKey: 'user' },
         { header: 'Correo', accessorKey: 'email' },
         { 
           header: 'Rol', 
@@ -456,6 +457,7 @@ function AdminModal({ resource, record, onClose }: { resource: string; record: A
   const form = useForm<Record<string, string | boolean | string[] | number[]>>({
     defaultValues: {
       name: String(record?.name ?? ''),
+      user: String(record?.user ?? ''),
       code: String(record?.code ?? ''),
       email: String(record?.email ?? ''),
       phone: String(record?.phone ?? ''),
@@ -496,6 +498,7 @@ function AdminModal({ resource, record, onClose }: { resource: string; record: A
           {resource === 'users' ? (
             <>
               <TextField label="Nombre" name="name" form={form} />
+              <TextField label="Usuario" name="user" form={form} />
               <TextField label="Correo" name="email" form={form} />
               <TextField label="Telefono" name="phone" form={form} />
               <TextField label="Password" name="password" form={form} type="password" />
@@ -557,6 +560,7 @@ function normalizeAdminPayload(resource: string, values: Record<string, string |
   if (resource === 'users') {
     return {
       name: values.name,
+      user: values.user,
       email: values.email,
       phone: values.phone || null,
       password: values.password || undefined,

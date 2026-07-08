@@ -13,16 +13,16 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $data = $request->validate([
-            'email' => ['required', 'email'],
+            'user' => ['required', 'string'],
             'password' => ['required', 'string'],
             'device_name' => ['nullable', 'string', 'max:120'],
         ]);
 
-        $user = User::with('role.permissions')->where('email', $data['email'])->first();
+        $user = User::with('role.permissions')->where('user', $data['user'])->first();
 
         if (! $user || ! Hash::check($data['password'], $user->password) || ! $user->is_active) {
             throw ValidationException::withMessages([
-                'email' => ['Credenciales invalidas o usuario inactivo.'],
+                'user' => ['Credenciales invalidas o usuario inactivo.'],
             ]);
         }
 
@@ -48,6 +48,7 @@ class AuthController extends Controller
     {
         return [
             'id' => $user->id,
+            'user' => $user->user,
             'name' => $user->name,
             'email' => $user->email,
             'phone' => $user->phone,

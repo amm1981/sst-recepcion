@@ -11,9 +11,9 @@ class AuthRepository @Inject constructor(
     private val api: DocsSaludApi,
     private val prefs: SharedPreferences
 ) {
-    suspend fun login(email: String, password: String): Result<Unit> {
+    suspend fun login(user: String, password: String): Result<Unit> {
         return try {
-            val response = api.login(LoginRequest(email, password))
+            val response = api.login(LoginRequest(user, password))
             if (response.isSuccessful && response.body() != null) {
                 val body = response.body()!!
                 prefs.edit()

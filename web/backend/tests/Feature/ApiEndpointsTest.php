@@ -20,6 +20,25 @@ class ApiEndpointsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_login_uses_user_field_instead_of_email(): void
+    {
+        $user = $this->adminUser();
+
+        $this->postJson('/api/auth/login', [
+            'user' => $user->user,
+            'password' => 'Password123',
+            'device_name' => 'Feature test',
+        ])->assertOk()
+            ->assertJsonPath('user.user', $user->user)
+            ->assertJsonStructure(['token']);
+
+        $this->postJson('/api/auth/login', [
+            'email' => $user->email,
+            'password' => 'Password123',
+        ])->assertStatus(422)
+            ->assertJsonValidationErrors('user');
+    }
+
     public function test_profile_password_requires_current_password(): void
     {
         $user = $this->adminUser();

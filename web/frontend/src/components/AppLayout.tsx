@@ -31,6 +31,7 @@ export function AppLayout() {
   const { user, can, logout } = useAuth()
   const navigate = useNavigate()
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const notificationsRef = useRef<HTMLDivElement>(null)
@@ -84,20 +85,21 @@ export function AppLayout() {
   }
 
   return (
-    <div className={`app-shell ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
+    <div className={`app-shell ${isCollapsed ? 'sidebar-collapsed' : ''} ${isMobileSidebarOpen ? 'mobile-sidebar-open' : ''}`}>
+      {isMobileSidebarOpen ? <button className="sidebar-backdrop" type="button" aria-label="Cerrar menu" onClick={() => setIsMobileSidebarOpen(false)} /> : null}
       <aside className="sidebar">
         <div className="brand" style={{ display: 'flex', justifyContent: 'center' }}>
           {isCollapsed ? (
             <img src="/icono_docssalud.png" alt="DocsSalud Icono" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
           ) : (
-            <img src="/logotipo_docssalud.png" alt="DocsSalud Logotipo" style={{ height: '32px', objectFit: 'contain' }} />
+            <img src="/logotipo_docssalud.png" alt="DocsSalud Logotipo" style={{ height: '58px', objectFit: 'contain' }} />
           )}
         </div>
         <nav className="nav-list">
           {navItems
             .filter((item) => !item.permission || can(item.permission))
             .map((item) => (
-              <NavLink className="nav-link" key={item.to} to={item.to} title={isCollapsed ? item.label : undefined}>
+              <NavLink className="nav-link" key={item.to} to={item.to} title={isCollapsed ? item.label : undefined} onClick={() => setIsMobileSidebarOpen(false)}>
                 <item.icon size={20} strokeWidth={2.5} />
                 <span>{item.label}</span>
               </NavLink>
@@ -107,7 +109,16 @@ export function AppLayout() {
       <main className="main">
         <header className="header" style={{ justifyContent: 'space-between' }}>
           <div>
-            <button className="toggle-sidebar-btn" onClick={() => setIsCollapsed(!isCollapsed)}>
+            <button
+              className="toggle-sidebar-btn"
+              onClick={() => {
+                if (window.matchMedia('(max-width: 960px)').matches) {
+                  setIsMobileSidebarOpen(true)
+                } else {
+                  setIsCollapsed(!isCollapsed)
+                }
+              }}
+            >
               <Menu size={20} />
             </button>
           </div>
