@@ -19,10 +19,15 @@ export function DataTable<TData extends object>({ data, columns, emptyText = 'Si
     getCoreRowModel: getCoreRowModel(),
   })
 
+  const headerLabels = table.getLeafHeaders().map((header) => {
+    const headerDef = header.column.columnDef.header
+    return typeof headerDef === 'string' ? headerDef : header.column.id
+  })
+
   return (
     <div className={className || "table-card"}>
       <div className="table-wrap">
-        <table>
+        <table className="data-table">
           <thead>
             {table.getHeaderGroups().map((headerGroup) => (
               <tr key={headerGroup.id}>
@@ -37,8 +42,8 @@ export function DataTable<TData extends object>({ data, columns, emptyText = 'Si
           <tbody>
             {table.getRowModel().rows.map((row) => (
               <tr key={row.id}>
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                {row.getVisibleCells().map((cell, index) => (
+                  <td key={cell.id} data-label={headerLabels[index] ?? ''}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
                 ))}
               </tr>
             ))}
