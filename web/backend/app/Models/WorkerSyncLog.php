@@ -17,6 +17,7 @@ class WorkerSyncLog extends Model
         'warning_count',
         'error_count',
         'error_message',
+        'details',
     ];
 
     protected function casts(): array
@@ -30,6 +31,7 @@ class WorkerSyncLog extends Model
             'inactive_count' => 'integer',
             'warning_count' => 'integer',
             'error_count' => 'integer',
+            'details' => 'array',
         ];
     }
 }

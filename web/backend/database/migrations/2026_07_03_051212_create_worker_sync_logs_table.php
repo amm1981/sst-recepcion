@@ -23,6 +23,7 @@ return new class extends Migration
             $table->integer('warning_count')->default(0);
             $table->integer('error_count')->default(0);
             $table->text('error_message')->nullable();
+            $table->json('details')->nullable();
             $table->timestamps();
         });
     }

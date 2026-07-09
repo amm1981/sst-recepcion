@@ -262,6 +262,50 @@ function WorkerSyncPanel() {
       )}
       {log?.finished_at ? <p className="muted-text">Ultima finalizacion: {new Date(log.finished_at).toLocaleString('es-PE')}</p> : null}
       {log?.error_message ? <div className="error">{log.error_message}</div> : null}
+      {log?.details?.length ? <WorkerSyncDetails details={log.details} /> : null}
+    </div>
+  )
+}
+
+function WorkerSyncDetails({ details }: { details: NonNullable<WorkerSyncLog['details']> }) {
+  return (
+    <div style={{ marginTop: 20 }}>
+      <h3 style={{ fontSize: 16, marginBottom: 12 }}>Detalle de advertencias y errores</h3>
+      <div style={{ display: 'grid', gap: 10 }}>
+        {details.map((detail, index) => (
+          <div
+            key={`${detail.type}-${detail.dni ?? 'sin-dni'}-${index}`}
+            style={{
+              border: '1px solid #e5e7eb',
+              borderLeft: `4px solid ${detail.type === 'error' ? '#dc2626' : '#f59e0b'}`,
+              borderRadius: 8,
+              padding: 12,
+              background: '#ffffff',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <strong style={{ color: detail.type === 'error' ? '#dc2626' : '#92400e' }}>
+                {detail.type === 'error' ? 'Error' : 'Advertencia'}
+              </strong>
+              <span className="muted-text" style={{ margin: 0 }}>DNI: {detail.dni || 'Sin DNI'}</span>
+            </div>
+            <p style={{ margin: '8px 0 0', color: '#374151' }}>{detail.message}</p>
+            {detail.context && Object.keys(detail.context).length ? (
+              <pre style={{
+                margin: '10px 0 0',
+                padding: 10,
+                borderRadius: 6,
+                background: '#f9fafb',
+                color: '#4b5563',
+                overflowX: 'auto',
+                fontSize: 12,
+              }}>
+                {JSON.stringify(detail.context, null, 2)}
+              </pre>
+            ) : null}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

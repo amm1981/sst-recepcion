@@ -66,6 +66,14 @@ export type WorkerSyncLog = {
   warning_count: number
   error_count: number
   error_message?: string | null
+  details?: WorkerSyncDetail[] | null
+}
+
+export type WorkerSyncDetail = {
+  type: 'warning' | 'error' | string
+  dni?: string | null
+  message: string
+  context?: Record<string, unknown>
 }
 
 export type DocumentCounts = {
