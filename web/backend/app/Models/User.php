@@ -72,17 +72,22 @@ class User extends Authenticatable
     {
         $this->loadMissing('role.permissions');
 
-        if ($this->role?->code === 'ADMIN') {
+        if (strtoupper((string) $this->role?->code) === 'ADMIN') {
             return true;
         }
 
-        return $this->role?->permissions->contains('code', $permission) ?? false;
+        return $this->role?->permissions->contains(
+            fn ($rolePermission) => trim((string) $rolePermission->code) === $permission
+        ) ?? false;
     }
 
     public function hasRole(string ...$roles): bool
     {
         $this->loadMissing('role');
 
-        return in_array($this->role?->code, $roles, true);
+        $currentRole = strtoupper((string) $this->role?->code);
+        $allowedRoles = array_map(fn (string $role) => strtoupper($role), $roles);
+
+        return in_array($currentRole, $allowedRoles, true);
     }
 }

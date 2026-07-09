@@ -7,12 +7,15 @@ use App\Models\Management;
 use App\Models\MedicalDocument;
 use App\Models\MedicalDocumentType;
 use App\Models\Notification;
+use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Sector;
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -101,6 +104,59 @@ class ApiEndpointsTest extends TestCase
             ]);
     }
 
+    public function test_rrhh_user_can_create_medical_document(): void
+    {
+        Storage::fake('local');
+
+        $role = Role::create([
+            'name' => 'Recursos Humanos',
+            'code' => 'rrhh',
+            'is_active' => true,
+        ]);
+        $permission = Permission::where('code', 'documents.create')->firstOrFail();
+        $role->permissions()->attach($permission->id);
+        $user = User::factory()->create(['role_id' => $role->id]);
+        $fixtures = $this->documentFixtures($user);
+        $worker = Worker::findOrFail($fixtures['worker_id']);
+        Sanctum::actingAs($user);
+
+        $this->post('/api/medical-documents', [
+            'medical_document_type_id' => $fixtures['medical_document_type_id'],
+            'worker_dni' => $worker->dni,
+            'delivery_relation_id' => $fixtures['delivery_relation_id'],
+            'deliverer_name' => 'Carlos Ramirez',
+            'contact_number' => '999111222',
+            'medical_document_file' => UploadedFile::fake()->create('descanso-medico.pdf', 128, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertCreated()
+            ->assertJsonPath('status', MedicalDocument::STATUS_PENDING);
+
+        $this->assertDatabaseHas('medical_documents', [
+            'worker_id' => $worker->id,
+            'created_by' => $user->id,
+            'status' => MedicalDocument::STATUS_PENDING,
+        ]);
+    }
+
+    public function test_report_summary_applies_status_and_type_filters(): void
+    {
+        $user = $this->adminUser();
+        $registeredFixtures = $this->documentFixtures($user);
+        $pendingFixtures = $this->documentFixtures($user);
+
+        MedicalDocument::create($registeredFixtures + ['status' => MedicalDocument::STATUS_REGISTERED]);
+        MedicalDocument::create($pendingFixtures + ['status' => MedicalDocument::STATUS_PENDING]);
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/reports/summary?status=' . MedicalDocument::STATUS_REGISTERED . '&type_id=' . $registeredFixtures['medical_document_type_id'])
+            ->assertOk()
+            ->assertJsonPath('total', 1)
+            ->assertJsonCount(1, 'by_status')
+            ->assertJsonPath('by_status.0.status', MedicalDocument::STATUS_REGISTERED)
+            ->assertJsonPath('by_status.0.total', 1)
+            ->assertJsonPath('by_type.0.registrados', 1)
+            ->assertJsonPath('by_type.0.pendientes', 0);
+    }
+
     public function test_report_pdf_export_returns_a_pdf_file(): void
     {
         $user = $this->adminUser();
@@ -130,8 +186,8 @@ class ApiEndpointsTest extends TestCase
 
     private function documentFixtures(User $user): array
     {
-        $management = Management::create(['name' => 'Operaciones', 'code' => 'OPER', 'is_active' => true]);
-        $sector = Sector::create(['name' => 'Planta', 'code' => 'PLANTA', 'is_active' => true]);
+        $management = Management::updateOrCreate(['code' => 'OPER'], ['name' => 'Operaciones', 'is_active' => true]);
+        $sector = Sector::updateOrCreate(['code' => 'PLANTA'], ['name' => 'Planta', 'is_active' => true]);
         $worker = Worker::create([
             'dni' => fake()->unique()->numerify('########'),
             'first_name' => 'Carlos',
@@ -140,8 +196,8 @@ class ApiEndpointsTest extends TestCase
             'sector_id' => $sector->id,
             'is_active' => true,
         ]);
-        $type = MedicalDocumentType::create(['name' => 'Descanso Medico', 'code' => fake()->unique()->lexify('DOC????'), 'is_active' => true]);
-        $relation = DeliveryRelation::create(['name' => 'Trabajador', 'code' => fake()->unique()->lexify('REL????'), 'is_active' => true]);
+        $type = MedicalDocumentType::create(['name' => 'Descanso Medico', 'code' => 'DOC' . str()->random(8), 'is_active' => true]);
+        $relation = DeliveryRelation::create(['name' => 'Trabajador', 'code' => 'REL' . str()->random(8), 'is_active' => true]);
 
         return [
             'medical_document_type_id' => $type->id,

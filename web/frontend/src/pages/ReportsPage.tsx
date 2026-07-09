@@ -29,23 +29,21 @@ export function ReportsPage() {
     sector_id: ''
   })
   
-  const [activeFilters, setActiveFilters] = useState({ ...filters })
-
   const catalogs = useQuery({
     queryKey: ['catalogs'],
     queryFn: async () => (await api.get<Catalogs>('/sync/catalogs')).data
   })
 
   const report = useQuery({
-    queryKey: ['reports', activeFilters],
+    queryKey: ['reports', filters],
     queryFn: async () => {
       const params = new URLSearchParams()
-      if (activeFilters.from) params.append('from', activeFilters.from)
-      if (activeFilters.to) params.append('to', activeFilters.to)
-      if (activeFilters.type_id) params.append('type_id', activeFilters.type_id)
-      if (activeFilters.status) params.append('status', activeFilters.status)
-      if (activeFilters.management_id) params.append('management_id', activeFilters.management_id)
-      if (activeFilters.sector_id) params.append('sector_id', activeFilters.sector_id)
+      if (filters.from) params.append('from', filters.from)
+      if (filters.to) params.append('to', filters.to)
+      if (filters.type_id) params.append('type_id', filters.type_id)
+      if (filters.status) params.append('status', filters.status)
+      if (filters.management_id) params.append('management_id', filters.management_id)
+      if (filters.sector_id) params.append('sector_id', filters.sector_id)
       return (await api.get<ReportSummary>(`/reports/summary?${params.toString()}`)).data
     },
   })
@@ -74,12 +72,12 @@ export function ReportsPage() {
   }, [report.data])
 
   const handleGenerate = () => {
-    setActiveFilters({ ...filters })
+    report.refetch()
   }
 
   const handleExportPdf = async () => {
     try {
-      const params = buildReportParams(activeFilters)
+      const params = buildReportParams(filters)
       const response = await api.get(`/reports/export/pdf?${params.toString()}`, { responseType: 'blob' })
       const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
       const link = document.createElement('a')
@@ -96,7 +94,7 @@ export function ReportsPage() {
 
   const handleExportExcel = async () => {
     try {
-      const params = buildReportParams(activeFilters)
+      const params = buildReportParams(filters)
       
       const response = await api.get(`/reports/export/excel?${params.toString()}`, { responseType: 'blob' })
       const url = window.URL.createObjectURL(new Blob([response.data]))

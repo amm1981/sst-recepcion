@@ -74,7 +74,7 @@ class MedicalDocumentController extends Controller
 
     public function store(Request $request)
     {
-        abort_unless($request->user()->canDo('documents.create'), 403);
+        abort_unless($request->user()->canDo('documents.create'), 403, 'No tiene permisos para crear documentos medicos.');
 
         $data = $this->validatedDocument($request);
         $relation = DeliveryRelation::findOrFail($data['delivery_relation_id']);

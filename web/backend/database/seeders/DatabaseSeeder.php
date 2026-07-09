@@ -33,8 +33,8 @@ class DatabaseSeeder extends Seeder
 
         $roles = [
             'ADMIN' => ['name' => 'Administrador', 'description' => 'Gestion total del sistema.', 'permissions' => $permissions->pluck('id')->all()],
-            'RRHH' => ['name' => 'Recursos Humanos', 'description' => 'Registro y consulta de sus documentos.', 'permissions' => $permissions->whereIn('code', ['documents.view', 'documents.create'])->pluck('id')->all()],
-            'SST' => ['name' => 'Seguridad y Salud en el Trabajo', 'description' => 'Registro, consulta y cambio de estado.', 'permissions' => $permissions->whereIn('code', ['documents.view', 'documents.create', 'documents.updateStatus', 'workers.manage'])->pluck('id')->all()],
+            'RRHH' => ['name' => 'Recursos Humanos', 'description' => 'Registro y consulta de sus documentos.', 'permissions' => $permissions->whereIn('code', ['documents.view', 'documents.create', 'reports.view'])->pluck('id')->all()],
+            'SST' => ['name' => 'Seguridad y Salud en el Trabajo', 'description' => 'Registro, consulta y cambio de estado.', 'permissions' => $permissions->whereIn('code', ['documents.view', 'documents.create', 'documents.updateStatus', 'workers.manage', 'reports.view'])->pluck('id')->all()],
         ];
 
         foreach ($roles as $code => $roleData) {
