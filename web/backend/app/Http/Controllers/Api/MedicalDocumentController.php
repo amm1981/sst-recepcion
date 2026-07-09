@@ -244,10 +244,10 @@ class MedicalDocumentController extends Controller
     {
         $this->authorizeDocumentView($request, $file->medicalDocument);
 
-        $disk = Storage::disk('local');
-        abort_unless($disk->exists($file->path), 404);
+        [$disk, $path] = $this->documentDiskAndPath($file->path);
+        abort_unless($disk->exists($path), 404);
 
-        return $disk->download($file->path, $file->original_name);
+        return $disk->download($path, $file->original_name);
     }
 
     public function previewFile(Request $request, MedicalDocumentFile $file)
@@ -264,12 +264,12 @@ class MedicalDocumentController extends Controller
         abort_unless($request->user(), 401);
         $this->authorizeDocumentView($request, $file->medicalDocument);
 
-        $disk = Storage::disk('local');
-        abort_unless($disk->exists($file->path), 404);
+        [$disk, $path] = $this->documentDiskAndPath($file->path);
+        abort_unless($disk->exists($path), 404);
 
         $mimeType = $file->mime_type ?? 'application/octet-stream';
 
-        return response($disk->get($file->path))
+        return response($disk->get($path))
             ->header('Content-Type', $mimeType)
             ->header('Content-Disposition', 'inline; filename="' . $file->original_name . '"')
             ->header('Cache-Control', 'private, max-age=3600');
@@ -303,7 +303,7 @@ class MedicalDocumentController extends Controller
 
     private function storeFile($file, MedicalDocument $document, string $type, int $userId): void
     {
-        $path = $file->store("medical-documents/{$document->id}", 'local');
+        $path = $file->store($this->documentStorageDirectory($document->id), $this->documentStorageDisk());
 
         MedicalDocumentFile::create([
             'medical_document_id' => $document->id,
@@ -314,6 +314,41 @@ class MedicalDocumentController extends Controller
             'size' => $file->getSize(),
             'uploaded_by' => $userId,
         ]);
+    }
+
+    private function documentStorageDisk(): string
+    {
+        return config('filesystems.default', 'local');
+    }
+
+    private function documentStoragePrefix(): string
+    {
+        return trim((string) config('filesystems.document_prefix', ''), '/');
+    }
+
+    private function documentStorageDirectory(int $documentId): string
+    {
+        return trim($this->documentStoragePrefix() . "/medical-documents/{$documentId}", '/');
+    }
+
+    private function documentDiskAndPath(string $storedPath): array
+    {
+        $disk = Storage::disk($this->documentStorageDisk());
+        $path = ltrim($storedPath, '/');
+
+        if ($disk->exists($path)) {
+            return [$disk, $path];
+        }
+
+        $prefix = $this->documentStoragePrefix();
+        if ($prefix !== '' && ! str_starts_with($path, "{$prefix}/")) {
+            $prefixedPath = "{$prefix}/{$path}";
+            if ($disk->exists($prefixedPath)) {
+                return [$disk, $prefixedPath];
+            }
+        }
+
+        return [$disk, $path];
     }
 
     private function authorizeDocumentView(Request $request, MedicalDocument $document): void

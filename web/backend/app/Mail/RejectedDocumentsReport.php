@@ -14,16 +14,18 @@ class RejectedDocumentsReport extends Mailable
     use Queueable, SerializesModels;
 
     public Collection $documents;
+    public bool $isTest;
 
-    public function __construct(Collection $documents)
+    public function __construct(Collection $documents, bool $isTest = false)
     {
         $this->documents = $documents;
+        $this->isTest = $isTest;
     }
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Reporte de Documentos Rechazados - ' . now()->format('d/m/Y'),
+            subject: ($this->isTest ? '[Prueba] ' : '') . 'Reporte de Documentos Rechazados - ' . now()->format('d/m/Y'),
         );
     }
 

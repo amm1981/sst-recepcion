@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
-import { Edit, Plus, Trash2, Users, ShieldCheck, FileText, Building2, Network, Truck, ChevronRight, History, RefreshCw, KeyRound } from 'lucide-react'
+import { Edit, Plus, Trash2, Users, ShieldCheck, FileText, Building2, Network, Truck, ChevronRight, History, RefreshCw, KeyRound, Mail, Send } from 'lucide-react'
 import { useMemo, useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { api, getErrorMessage } from '../api/client'
@@ -22,6 +22,7 @@ const resources = [
   { key: 'delivery-relations', label: 'Relaciones Entrega', icon: Truck, desc: 'Configurar las relaciones de entrega de documentos.' },
   { key: 'audit-logs', label: 'Auditoria', icon: History, desc: 'Consultar acciones y trazabilidad del sistema.' },
   { key: 'worker-sync', label: 'Data Maestra', icon: RefreshCw, desc: 'Sincronizar trabajadores desde EmployeeFlow.' },
+  { key: 'mail-settings', label: 'Correos', icon: Mail, desc: 'Configurar destinatarios y pruebas de alertas.' },
 ]
 
 export function AdminPage() {
@@ -51,7 +52,7 @@ export function AdminPage() {
         : `search=${encodeURIComponent(debouncedSearch)}`
       return (await api.get<Paginated<AdminRecord>>(`/admin/${resource}?${params}`)).data
     },
-    enabled: resource !== 'worker-sync',
+    enabled: !['worker-sync', 'mail-settings'].includes(resource),
   })
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => api.delete(`/admin/${resource}/${id}`),
@@ -187,7 +188,7 @@ export function AdminPage() {
             value={searchQuery}
             onChange={setSearchQuery}
           />
-          {!['audit-logs', 'worker-sync'].includes(resource) ? (
+          {!['audit-logs', 'worker-sync', 'mail-settings'].includes(resource) ? (
             <button className="btn" type="button" onClick={() => setEditing({ id: 0 })}>
               <Plus size={18} /> Nuevo {activeResource?.label.replace(/s$/, '').replace(/es$/, '')}
             </button>
@@ -197,6 +198,8 @@ export function AdminPage() {
 
       {resource === 'worker-sync' ? (
         <WorkerSyncPanel />
+      ) : resource === 'mail-settings' ? (
+        <MailSettingsPanel />
       ) : (
         <DataTable data={records.data?.data ?? []} columns={columns} />
       )}
@@ -272,6 +275,102 @@ function SyncMetric({ label, value }: { label: string; value: string | number })
       </div>
     </div>
   )
+}
+
+type MailSettings = {
+  rejected_report_recipients: string[]
+}
+
+function MailSettingsPanel() {
+  const queryClient = useQueryClient()
+  const [recipientsText, setRecipientsText] = useState('')
+  const [testRecipientsText, setTestRecipientsText] = useState('')
+
+  const settings = useQuery({
+    queryKey: ['admin', 'mail-settings'],
+    queryFn: async () => (await api.get<MailSettings>('/admin/mail-settings')).data,
+  })
+
+  useEffect(() => {
+    if (settings.data) {
+      setRecipientsText(settings.data.rejected_report_recipients.join('\n'))
+    }
+  }, [settings.data])
+
+  const saveMutation = useMutation({
+    mutationFn: async () => (
+      await api.put<MailSettings>('/admin/mail-settings', {
+        rejected_report_recipients: parseEmails(recipientsText),
+      })
+    ).data,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'mail-settings'] })
+    },
+  })
+
+  const testMutation = useMutation({
+    mutationFn: async () => (
+      await api.post<{ message: string; recipients: string[]; documents_count: number }>('/admin/mail-settings/test', {
+        recipients: parseEmails(testRecipientsText),
+      })
+    ).data,
+  })
+
+  return (
+    <div className="table-card" style={{ padding: 24 }}>
+      <div className="table-header" style={{ padding: 0, marginBottom: 16 }}>
+        <div>
+          <h2>Alertas por correo</h2>
+          <p className="muted-text">Configura destinatarios del resumen diario de documentos rechazados.</p>
+        </div>
+      </div>
+
+      <div className="grid two">
+        <div className="field">
+          <label>Destinatarios del reporte diario</label>
+          <textarea
+            value={recipientsText}
+            onChange={(event) => setRecipientsText(event.target.value)}
+            placeholder={'correo1@empresa.com\ncorreo2@empresa.com'}
+            style={{ minHeight: 150 }}
+          />
+          <p className="muted-text">Puedes ingresar un correo por linea, separados por coma o punto y coma.</p>
+          {saveMutation.error ? <div className="error">{getErrorMessage(saveMutation.error)}</div> : null}
+          {saveMutation.isSuccess ? <div style={{ color: '#047857', fontSize: 13 }}>Destinatarios guardados.</div> : null}
+          <button className="btn" type="button" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+            <Mail size={18} /> {saveMutation.isPending ? 'Guardando...' : 'Guardar destinatarios'}
+          </button>
+        </div>
+
+        <div className="field">
+          <label>Correo de prueba</label>
+          <textarea
+            value={testRecipientsText}
+            onChange={(event) => setTestRecipientsText(event.target.value)}
+            placeholder="Dejalo vacio para usar los destinatarios guardados"
+            style={{ minHeight: 150 }}
+          />
+          <p className="muted-text">Envia la plantilla actual. Si no hay rechazados hoy, usa datos de muestra para validar el diseno.</p>
+          {testMutation.error ? <div className="error">{getErrorMessage(testMutation.error)}</div> : null}
+          {testMutation.data ? (
+            <div style={{ color: '#047857', fontSize: 13 }}>
+              {testMutation.data.message} Destinatarios: {testMutation.data.recipients.join(', ')}.
+            </div>
+          ) : null}
+          <button className="btn secondary" type="button" onClick={() => testMutation.mutate()} disabled={testMutation.isPending}>
+            <Send size={18} /> {testMutation.isPending ? 'Enviando...' : 'Enviar correo de prueba'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function parseEmails(value: string): string[] {
+  return value
+    .split(/[\n,;]+/)
+    .map((email) => email.trim())
+    .filter(Boolean)
 }
 
 function ConfirmDeleteModal({

@@ -15,6 +15,7 @@ use App\Models\Worker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -135,6 +136,10 @@ class ApiEndpointsTest extends TestCase
             'created_by' => $user->id,
             'status' => MedicalDocument::STATUS_PENDING,
         ]);
+
+        $file = MedicalDocument::firstOrFail()->files()->firstOrFail();
+        $this->assertStringStartsWith('sst/medical-documents/', $file->path);
+        Storage::disk(config('filesystems.default'))->assertExists($file->path);
     }
 
     public function test_report_summary_applies_status_and_type_filters(): void
@@ -168,6 +173,33 @@ class ApiEndpointsTest extends TestCase
         $response->assertOk();
         $response->assertHeader('content-type', 'application/pdf');
         $this->assertStringStartsWith('%PDF-1.4', $response->getContent());
+    }
+
+    public function test_admin_can_configure_and_send_rejected_report_test_email(): void
+    {
+        Mail::fake();
+        $user = $this->adminUser();
+        Sanctum::actingAs($user);
+
+        $this->putJson('/api/admin/mail-settings', [
+            'rejected_report_recipients' => ['rrhh@example.com', 'sst@example.com'],
+        ])->assertOk()
+            ->assertJsonPath('rejected_report_recipients.0', 'rrhh@example.com')
+            ->assertJsonPath('rejected_report_recipients.1', 'sst@example.com');
+
+        $this->assertDatabaseHas('system_settings', [
+            'key' => 'rejected_documents_report_recipients',
+        ]);
+
+        $this->postJson('/api/admin/mail-settings/test')
+            ->assertOk()
+            ->assertJsonPath('documents_count', 2);
+
+        Mail::assertSent(\App\Mail\RejectedDocumentsReport::class, function ($mail) {
+            return $mail->hasTo('rrhh@example.com')
+                && $mail->hasTo('sst@example.com')
+                && $mail->isTest === true;
+        });
     }
 
     private function adminUser(): User

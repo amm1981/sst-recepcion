@@ -3,67 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Documentos Rechazados</title>
+    <title>Reporte de documentos rechazados</title>
 </head>
-<body style="margin:0; padding:0; background-color:#f4f4f7; font-family:'Segoe UI',Roboto,Arial,sans-serif;">
-    <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f7; padding:32px 0;">
+<body style="margin:0; padding:0; background:#ffffff; font-family:Arial, Helvetica, sans-serif; color:#111827;">
+    <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#ffffff; padding:24px 0;">
         <tr>
-            <td align="center">
-                <table width="640" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-                    <!-- Header -->
+            <td align="center" style="padding:0 16px;">
+                <table width="680" cellpadding="0" cellspacing="0" role="presentation" style="width:100%; max-width:680px; background:#ffffff; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
                     <tr>
-                        <td style="background: linear-gradient(135deg, #047857, #065f46); padding:28px 32px; text-align:center;">
-                            <h1 style="color:#ffffff; margin:0; font-size:22px; font-weight:700;">⚠️ Reporte de Documentos Rechazados</h1>
-                            <p style="color:#a7f3d0; margin:8px 0 0; font-size:14px;">{{ now()->format('d/m/Y') }} — AgroCalera APPs</p>
+                        <td style="padding:28px 32px 22px; border-bottom:1px solid #e5e7eb;">
+                            <div style="font-size:13px; font-weight:700; color:#047857; text-transform:uppercase; letter-spacing:0.04em;">DocsSalud SST</div>
+                            <h1 style="margin:10px 0 0; font-size:24px; line-height:1.25; color:#111827;">Reporte diario de documentos rechazados</h1>
+                            <p style="margin:8px 0 0; color:#6b7280; font-size:14px;">{{ now()->format('d/m/Y') }}</p>
+                            @if($isTest)
+                                <div style="display:inline-block; margin-top:14px; padding:6px 10px; border-radius:6px; background:#ecfdf5; color:#047857; font-size:12px; font-weight:700;">Correo de prueba</div>
+                            @endif
                         </td>
                     </tr>
 
-                    <!-- Summary -->
                     <tr>
-                        <td style="padding:24px 32px 8px;">
-                            <p style="margin:0; font-size:15px; color:#374151;">
-                                Se encontraron <strong style="color:#B42318;">{{ $documents->count() }}</strong> documento(s) rechazado(s) durante el día de hoy.
-                            </p>
+                        <td style="padding:24px 32px;">
+                            <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border:1px solid #fee2e2; border-radius:8px; background:#fff7f7;">
+                                <tr>
+                                    <td style="padding:18px 20px;">
+                                        <div style="font-size:13px; color:#991b1b; font-weight:700; text-transform:uppercase;">Total rechazados del dia</div>
+                                        <div style="font-size:36px; line-height:1; font-weight:800; color:#b91c1c; margin-top:8px;">{{ $documents->count() }}</div>
+                                        <p style="margin:10px 0 0; color:#7f1d1d; font-size:14px;">Los documentos listados requieren revision o correccion por el equipo responsable.</p>
+                                    </td>
+                                </tr>
+                            </table>
                         </td>
                     </tr>
 
-                    <!-- Table -->
                     <tr>
-                        <td style="padding:16px 32px 32px;">
-                            <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
+                        <td style="padding:0 32px 30px;">
+                            <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse; font-size:13px;">
                                 <thead>
-                                    <tr style="background-color:#f9fafb;">
-                                        <th style="padding:10px 12px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280; font-weight:600;">N°</th>
-                                        <th style="padding:10px 12px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280; font-weight:600;">Tipo</th>
-                                        <th style="padding:10px 12px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280; font-weight:600;">Trabajador</th>
-                                        <th style="padding:10px 12px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280; font-weight:600;">DNI</th>
-                                        <th style="padding:10px 12px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280; font-weight:600;">Registrado por</th>
-                                        <th style="padding:10px 12px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280; font-weight:600;">Rechazado por</th>
+                                    <tr>
+                                        <th style="padding:11px 10px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Documento</th>
+                                        <th style="padding:11px 10px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Tipo</th>
+                                        <th style="padding:11px 10px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Trabajador</th>
+                                        <th style="padding:11px 10px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">DNI</th>
+                                        <th style="padding:11px 10px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Rechazado por</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach($documents as $doc)
-                                    <tr style="border-bottom:1px solid #f3f4f6;">
-                                        <td style="padding:10px 12px; color:#111827;">{{ $doc->id }}</td>
-                                        <td style="padding:10px 12px; color:#111827;">{{ $doc->type?->name ?? '-' }}</td>
-                                        <td style="padding:10px 12px; color:#111827;">{{ $doc->worker?->first_name }} {{ $doc->worker?->last_name }}</td>
-                                        <td style="padding:10px 12px; color:#111827;">{{ $doc->worker?->dni ?? '-' }}</td>
-                                        <td style="padding:10px 12px; color:#111827;">{{ $doc->creator?->name ?? '-' }}</td>
-                                        <td style="padding:10px 12px; color:#111827;">{{ $doc->statusChangedBy?->name ?? '-' }}</td>
-                                    </tr>
+                                        <tr>
+                                            <td style="padding:12px 10px; border-bottom:1px solid #f3f4f6; color:#111827; font-weight:700;">#{{ $doc->id }}</td>
+                                            <td style="padding:12px 10px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ $doc->type?->name ?? '-' }}</td>
+                                            <td style="padding:12px 10px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ trim(($doc->worker?->first_name ?? '') . ' ' . ($doc->worker?->last_name ?? '')) ?: '-' }}</td>
+                                            <td style="padding:12px 10px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ $doc->worker?->dni ?? '-' }}</td>
+                                            <td style="padding:12px 10px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ $doc->statusChangedBy?->name ?? '-' }}</td>
+                                        </tr>
                                     @endforeach
                                 </tbody>
                             </table>
                         </td>
                     </tr>
 
-                    <!-- Footer -->
                     <tr>
-                        <td style="background-color:#f9fafb; padding:20px 32px; text-align:center; border-top:1px solid #e5e7eb;">
-                            <p style="margin:0; font-size:12px; color:#9ca3af;">
-                                Este es un correo automático generado por AgroCalera APPs.<br>
-                                Por favor no responda a este mensaje.
-                            </p>
+                        <td style="padding:18px 32px; border-top:1px solid #e5e7eb; color:#6b7280; font-size:12px; line-height:1.5;">
+                            Este correo se genera automaticamente cuando existen documentos rechazados durante el dia. Los destinatarios se configuran desde Administracion en DocsSalud.
                         </td>
                     </tr>
                 </table>

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\MailSettingsController;
 use App\Http\Controllers\Api\MedicalDocumentController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\ReportController;
@@ -43,6 +44,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('admin')->middleware('permission:admin.manage')->group(function () {
         Route::post('/workers/sync-employee-flow', [\App\Http\Controllers\Api\WorkerSyncController::class, 'trigger']);
         Route::get('/workers/sync-employee-flow/latest', [\App\Http\Controllers\Api\WorkerSyncController::class, 'latest']);
+        Route::get('/mail-settings', [MailSettingsController::class, 'show']);
+        Route::put('/mail-settings', [MailSettingsController::class, 'update']);
+        Route::post('/mail-settings/test', [MailSettingsController::class, 'sendTest']);
         
         Route::get('/audit-logs', [\App\Http\Controllers\Api\AuditLogController::class, 'index']);
         Route::get('/{resource}', [AdminController::class, 'index']);

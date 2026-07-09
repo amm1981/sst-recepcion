@@ -2,35 +2,36 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Models\MedicalDocument;
-use Illuminate\Support\Facades\Mail;
 use App\Mail\RejectedDocumentsReport;
+use App\Services\RejectedDocumentsMailSettings;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Mail;
 
 class SendRejectedDocumentsReport extends Command
 {
     protected $signature = 'documents:send-rejected-report';
-    protected $description = 'Envía un reporte diario de documentos rechazados por correo';
+    protected $description = 'Envia un reporte diario de documentos rechazados por correo';
 
-    public function handle()
+    public function handle(RejectedDocumentsMailSettings $settings): int
     {
-        $documents = MedicalDocument::with(['type', 'worker', 'creator', 'statusChangedBy'])
-            ->where('status', MedicalDocument::STATUS_REJECTED)
-            ->whereDate('status_changed_at', today())
-            ->get();
+        $documents = $settings->rejectedToday();
 
         if ($documents->isEmpty()) {
-            $this->info('No hay documentos rechazados hoy. No se envía reporte.');
-            return;
+            $this->info('No hay documentos rechazados hoy. No se envia reporte.');
+            return self::SUCCESS;
         }
 
-        $recipients = [
-            'svillegas@lacalera.com.pe',
-            'amendoza@lacalera.com.pe',
-        ];
+        $recipients = $settings->recipients();
+
+        if ($recipients === []) {
+            $this->warn('No hay destinatarios configurados. No se envia reporte.');
+            return self::SUCCESS;
+        }
 
         Mail::to($recipients)->send(new RejectedDocumentsReport($documents));
 
         $this->info("Reporte de {$documents->count()} documentos rechazados enviado a: " . implode(', ', $recipients));
+
+        return self::SUCCESS;
     }
 }

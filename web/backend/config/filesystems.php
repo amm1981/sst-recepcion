@@ -15,6 +15,8 @@ return [
 
     'default' => env('FILESYSTEM_DISK', 'local'),
 
+    'document_prefix' => trim(env('DOCUMENT_STORAGE_PREFIX', 'sst'), '/'),
+
     /*
     |--------------------------------------------------------------------------
     | Filesystem Disks
