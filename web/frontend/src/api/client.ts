@@ -13,6 +13,10 @@ api.interceptors.request.use((config) => {
 })
 
 export function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && !('response' in error)) {
+    return error.message
+  }
+
   const axiosError = error as AxiosError<{ message?: string; errors?: Record<string, string[]> }>
   const firstValidationError = axiosError.response?.data.errors
     ? Object.values(axiosError.response.data.errors)[0]?.[0]

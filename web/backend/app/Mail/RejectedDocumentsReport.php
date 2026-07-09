@@ -25,7 +25,7 @@ class RejectedDocumentsReport extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: ($this->isTest ? '[Prueba] ' : '') . 'Reporte de Documentos Rechazados - ' . now()->format('d/m/Y'),
+            subject: ($this->isTest ? '[Prueba] ' : '') . 'NOTIFICACIÓN - Reporte de Documentos Rechazados - ' . now()->format('d/m/Y'),
         );
     }
 

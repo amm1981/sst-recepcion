@@ -18,7 +18,8 @@ data class MainState(
     val syncPercent: Int = 0,
     val syncProgressMessage: String = "",
     val showSyncDialog: Boolean = false,
-    val syncMessage: String? = null
+    val syncMessage: String? = null,
+    val syncRevision: Int = 0
 )
 
 @HiltViewModel
@@ -70,6 +71,7 @@ class MainViewModel @Inject constructor(
                 isSyncing = false,
                 syncPercent = if (result.isSuccess) 100 else _state.value.syncPercent,
                 showSyncDialog = false,
+                syncRevision = if (result.isSuccess) _state.value.syncRevision + 1 else _state.value.syncRevision,
                 syncMessage = if (showMessage) {
                     result.fold(
                         onSuccess = { "Data Maestra actualizada." },

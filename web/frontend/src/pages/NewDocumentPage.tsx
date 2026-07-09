@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Search, FileText, Phone, Camera, Upload, IdCard, Save, Plus } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { Search, FileText, Phone, Camera, Upload, IdCard, Save, Plus, Loader2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
@@ -10,7 +10,7 @@ import type { Catalogs, MedicalDocument, Worker } from '../types'
 
 const schema = z.object({
   medical_document_type_id: z.string().min(1, 'Seleccione el tipo'),
-  worker_dni: z.string().min(8, 'Ingrese DNI'),
+  worker_dni: z.string().min(2, 'Ingrese DNI, nombre o apellidos'),
   delivery_relation_id: z.string().min(1, 'Seleccione la relacion'),
   delivery_relation_detail: z.string().optional(),
   deliverer_name: z.string().min(1, 'Ingrese nombre'),
@@ -23,6 +23,53 @@ const schema = z.object({
 })
 
 type NewDocumentForm = z.infer<typeof schema>
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024
+const DOCUMENT_ACCEPT = '.pdf,.docx,.jpeg,.jpg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png'
+const IMAGE_ACCEPT = '.jpeg,.jpg,.png,image/jpeg,image/png'
+const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'jpeg', 'jpg', 'png']
+
+function fileExtension(file: File) {
+  return file.name.split('.').pop()?.toLowerCase() ?? ''
+}
+
+function validateDocumentFile(file: File) {
+  if (file.size > MAX_FILE_SIZE) {
+    throw new Error(`El archivo ${file.name} supera el tamano maximo de 10MB.`)
+  }
+  if (!ALLOWED_EXTENSIONS.includes(fileExtension(file))) {
+    throw new Error(`Formato no permitido: ${file.name}. Use DOCX, PDF, JPEG, JPG o PNG.`)
+  }
+}
+
+async function compressImageFile(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) return file
+  const bitmap = await createImageBitmap(file)
+  const maxSide = 1800
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
+  const width = Math.max(1, Math.round(bitmap.width * scale))
+  const height = Math.max(1, Math.round(bitmap.height * scale))
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d')
+  if (!context) return file
+  context.drawImage(bitmap, 0, 0, width, height)
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.78))
+  bitmap.close()
+  if (!blob || blob.size >= file.size) return file
+  const compressedName = file.name.replace(/\.[^.]+$/, '.jpg')
+  return new File([blob], compressedName, { type: 'image/jpeg', lastModified: Date.now() })
+}
+
+async function prepareDocumentFile(file: File) {
+  validateDocumentFile(file)
+  const prepared = await compressImageFile(file)
+  if (prepared.size > MAX_FILE_SIZE) {
+    throw new Error(`El archivo ${file.name} supera el tamano maximo de 10MB incluso despues de comprimir.`)
+  }
+  return prepared
+}
 
 export function NewDocumentPage() {
   const navigate = useNavigate()
@@ -59,6 +106,7 @@ export function NewDocumentPage() {
     () => catalogs.data?.delivery_relations.find((item) => String(item.id) === relationId),
     [catalogs.data?.delivery_relations, relationId],
   )
+  const isWorkerRelation = selectedRelation?.code === 'TRABAJADOR' || selectedRelation?.name.toLowerCase() === 'trabajador'
   
   const delivererPhoto = useWatch({ control: form.control, name: 'deliverer_photo' })
   const medicalFile = useWatch({ control: form.control, name: 'medical_document_file' })
@@ -74,15 +122,37 @@ export function NewDocumentPage() {
     setWorker(null)
     setWorkerError('')
     try {
-      const response = await api.get<Worker>(`/workers/search/${form.getValues('worker_dni')}`)
+      const query = form.getValues('worker_dni').trim()
+      const response = await api.get<Worker>(`/workers/search/${encodeURIComponent(query)}`)
       setWorker(response.data)
+      form.setValue('worker_dni', response.data.dni, { shouldValidate: true })
+      form.setValue('contact_number', response.data.phone ?? '', { shouldValidate: true })
+      if (isWorkerRelation) {
+        form.setValue('deliverer_name', `${response.data.first_name} ${response.data.last_name}`.trim(), { shouldValidate: true })
+        form.setValue('deliverer_document', response.data.dni, { shouldValidate: true })
+      }
     } catch {
       setWorkerError('Trabajador no encontrado.')
     }
   }
 
+  useEffect(() => {
+    if (!selectedRelation) return
+    if (isWorkerRelation && worker) {
+      form.setValue('deliverer_name', `${worker.first_name} ${worker.last_name}`.trim(), { shouldValidate: true })
+      form.setValue('deliverer_document', worker.dni, { shouldValidate: true })
+      form.setValue('contact_number', worker.phone ?? '', { shouldValidate: true })
+    } else if (!isWorkerRelation) {
+      form.setValue('delivery_relation_detail', '')
+      form.setValue('deliverer_name', '', { shouldValidate: true })
+      form.setValue('deliverer_document', '', { shouldValidate: true })
+      form.setValue('contact_number', worker?.phone ?? '', { shouldValidate: true })
+    }
+  }, [form, isWorkerRelation, selectedRelation, worker])
+
   const mutation = useMutation({
     mutationFn: async (values: NewDocumentForm) => {
+      setSubmitError('')
       const data = new FormData()
       Object.entries(values).forEach(([key, value]) => {
         if (key !== 'deliverer_photo' && key !== 'medical_document_file' && key !== 'annexes' && value) {
@@ -91,9 +161,11 @@ export function NewDocumentPage() {
       })
       const photo = values.deliverer_photo?.[0] as File | undefined
       const mFile = values.medical_document_file?.[0] as File | undefined
-      if (photo) data.append('deliverer_photo', photo)
-      if (mFile) data.append('medical_document_file', mFile)
-      Array.from((values.annexes ?? []) as FileList).forEach((file) => data.append('annexes[]', file))
+      if (photo) data.append('deliverer_photo', await prepareDocumentFile(photo))
+      if (mFile) data.append('medical_document_file', await prepareDocumentFile(mFile))
+      for (const file of Array.from((values.annexes ?? []) as FileList)) {
+        data.append('annexes[]', await prepareDocumentFile(file))
+      }
       return (await api.post<MedicalDocument>('/medical-documents', data)).data
     },
     onSuccess: async (document) => {
@@ -149,10 +221,10 @@ export function NewDocumentPage() {
             </div>
 
             <div className="field" style={{ marginTop: 24 }}>
-              <label>DNI *</label>
+              <label>Trabajador *</label>
               <div className="search-input-integrated">
-                <input {...form.register('worker_dni')} placeholder="12345678" />
-                <button type="button" className="search-btn" onClick={searchWorker}>
+                <input {...form.register('worker_dni')} placeholder="Buscar por DNI, nombre o apellidos" />
+                <button type="button" className="search-btn" onClick={searchWorker} disabled={mutation.isPending}>
                   <Search size={18} />
                 </button>
               </div>
@@ -227,7 +299,7 @@ export function NewDocumentPage() {
                 <button type="button" className="dropzone-btn" onClick={() => delivererPhotoRef.current?.click()}>
                   <Upload size={16} /> Subir archivo
                 </button>
-                <input type="file" accept="image/*" {...dRest} ref={(e) => { dRef(e); delivererPhotoRef.current = e }} style={{ display: 'none' }} />
+                <input type="file" accept={IMAGE_ACCEPT} {...dRest} ref={(e) => { dRef(e); delivererPhotoRef.current = e }} style={{ display: 'none' }} />
               </div>
               {form.formState.errors.deliverer_photo && <span className="error">{form.formState.errors.deliverer_photo.message as string}</span>}
             </div>
@@ -235,7 +307,7 @@ export function NewDocumentPage() {
 
           <div className="new-doc-section">
             <div className="field">
-              <label>Foto del Documento *</label>
+              <label>Documento *</label>
               <div className="dropzone-box" style={{ marginTop: 8 }}>
                 <FileText size={40} className="dropzone-icon" />
                 <div className="file-hint">
@@ -249,8 +321,9 @@ export function NewDocumentPage() {
                 <button type="button" className="dropzone-btn" onClick={() => medicalFileRef.current?.click()}>
                   <Upload size={16} /> Subir archivo
                 </button>
-                <input type="file" {...mRest} ref={(e) => { mRef(e); medicalFileRef.current = e }} style={{ display: 'none' }} />
+                <input type="file" accept={DOCUMENT_ACCEPT} {...mRest} ref={(e) => { mRef(e); medicalFileRef.current = e }} style={{ display: 'none' }} />
               </div>
+              <div className="file-hint">Formatos permitidos: DOCX, PDF, JPEG, JPG, PNG. Tamano maximo por archivo: 10MB. Las imagenes se comprimen antes de subir.</div>
               {form.formState.errors.medical_document_file && <span className="error">{form.formState.errors.medical_document_file.message as string}</span>}
             </div>
           </div>
@@ -281,12 +354,12 @@ export function NewDocumentPage() {
               <Plus size={24} />
               <div style={{ fontWeight: 600 }}>Adjuntar archivo</div>
               {annexes?.length ? <div className="file-hint" style={{ color: '#047857' }}>{getFileNames(annexes)}</div> : null}
-              <input type="file" multiple {...aRest} ref={(e) => { aRef(e); annexesRef.current = e }} style={{ display: 'none' }} />
+              <input type="file" multiple accept={DOCUMENT_ACCEPT} {...aRest} ref={(e) => { aRef(e); annexesRef.current = e }} style={{ display: 'none' }} />
             </div>
             
             <div className="file-hint">
-              <span>Formatos permitidos: PDF, JPG, PNG</span>
-              <span>Tamaño máximo por archivo: 10MB</span>
+              <span>Formatos permitidos: DOCX, PDF, JPEG, JPG, PNG</span>
+              <span>Tamano maximo por archivo: 10MB. Las imagenes se comprimen antes de subir.</span>
             </div>
             {form.formState.errors.annexes && <span className="error">{form.formState.errors.annexes.message as string}</span>}
           </div>
@@ -294,7 +367,8 @@ export function NewDocumentPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {submitError && <div className="error">{submitError}</div>}
             <button className="btn-save-large" type="submit" disabled={mutation.isPending}>
-              <Save size={20} /> Guardar Registro
+              {mutation.isPending ? <Loader2 size={20} className="spin" /> : <Save size={20} />}
+              {mutation.isPending ? 'Registrando documento...' : 'Guardar Registro'}
             </button>
           </div>
         </div>

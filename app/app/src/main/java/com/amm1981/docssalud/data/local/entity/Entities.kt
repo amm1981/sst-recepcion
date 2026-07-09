@@ -23,6 +23,7 @@ data class CatalogEntity(
     val id: Int,
     val type: String,
     val name: String,
+    val code: String? = null,
     val requiresDetail: Boolean = false
 )
 

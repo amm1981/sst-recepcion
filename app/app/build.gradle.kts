@@ -33,7 +33,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -99,6 +101,8 @@ dependencies {
 
     // Security
     implementation(libs.androidx.security.crypto)
+
+    implementation("com.google.errorprone:error_prone_annotations:2.28.0")
 
     // Navigation
     implementation(libs.androidx.navigation.compose)

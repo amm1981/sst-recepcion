@@ -65,7 +65,17 @@ class WorkerController extends Controller
 
     public function searchByDni(string $dni)
     {
-        $worker = Worker::with(['management', 'sector'])->where('dni', $dni)->firstOrFail();
+        $query = trim($dni);
+        $worker = Worker::with(['management', 'sector'])
+            ->where('is_active', true)
+            ->where(function ($sub) use ($query) {
+                $sub->where('dni', $query)
+                    ->orWhere('dni', 'like', "%{$query}%")
+                    ->orWhere('first_name', 'like', "%{$query}%")
+                    ->orWhere('last_name', 'like', "%{$query}%");
+            })
+            ->orderByRaw('CASE WHEN dni = ? THEN 0 ELSE 1 END', [$query])
+            ->firstOrFail();
 
         return response()->json($worker);
     }

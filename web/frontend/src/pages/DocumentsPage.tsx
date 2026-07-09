@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
-import { Calendar, Upload, MoreVertical, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Calendar, Upload, RefreshCw, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, getErrorMessage } from '../api/client'
@@ -68,7 +68,7 @@ export function DocumentsPage() {
               </button>
             ) : null}
             <Link className="icon-btn ghost" to={`/documents/${row.original.id}`} title="Ver detalle" style={{ color: '#9ca3af' }}>
-              <MoreVertical size={20} />
+              <Eye size={20} />
             </Link>
           </div>
         ),

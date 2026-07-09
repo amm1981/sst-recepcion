@@ -12,10 +12,15 @@ use App\Models\Worker;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 
 class MedicalDocumentController extends Controller
 {
+    private const MAX_DOCUMENT_FILE_KB = 10240;
+    private const ALLOWED_DOCUMENT_MIMES = 'pdf,docx,jpeg,jpg,png';
+
     public function index(Request $request)
     {
         $query = MedicalDocument::with(['type', 'worker.management', 'worker.sector', 'deliveryRelation', 'creator', 'files'])
@@ -284,11 +289,11 @@ class MedicalDocumentController extends Controller
             'delivery_relation_detail' => ['nullable', 'string', 'max:255'],
             'deliverer_name' => ['required', 'string', 'max:255'],
             'deliverer_document' => ['nullable', 'string', 'max:50'],
-            'deliverer_photo' => ['nullable', 'file', 'max:8192'],
-            'medical_document_file' => ['required', 'file', 'max:15360'],
+            'deliverer_photo' => ['nullable', 'file', 'mimes:jpeg,jpg,png', 'max:' . self::MAX_DOCUMENT_FILE_KB],
+            'medical_document_file' => ['required', 'file', 'mimes:' . self::ALLOWED_DOCUMENT_MIMES, 'max:' . self::MAX_DOCUMENT_FILE_KB],
             'contact_number' => ['required', 'string', 'max:50'],
             'annexes' => ['nullable', 'array', 'max:4'],
-            'annexes.*' => ['file', 'max:15360'],
+            'annexes.*' => ['file', 'mimes:' . self::ALLOWED_DOCUMENT_MIMES, 'max:' . self::MAX_DOCUMENT_FILE_KB],
             'observation' => ['nullable', 'string'],
             'offline_uuid' => ['nullable', 'string', 'max:120', 'unique:medical_documents,offline_uuid'],
         ]);
@@ -301,19 +306,116 @@ class MedicalDocumentController extends Controller
         }
     }
 
-    private function storeFile($file, MedicalDocument $document, string $type, int $userId): void
+    private function storeFile(UploadedFile $file, MedicalDocument $document, string $type, int $userId): void
     {
-        $path = $file->store($this->documentStorageDirectory($document->id), $this->documentStorageDisk());
+        $prepared = $this->prepareFileForStorage($file);
+        $disk = Storage::disk($this->documentStorageDisk());
+        $path = $this->uniqueStoragePath($this->documentStorageDirectory($document->id), $prepared['name']);
+
+        $stream = fopen($prepared['path'], 'rb');
+        try {
+            $disk->put($path, $stream);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+            if ($prepared['temporary']) {
+                @unlink($prepared['path']);
+            }
+        }
 
         MedicalDocumentFile::create([
             'medical_document_id' => $document->id,
             'file_type' => $type,
-            'original_name' => $file->getClientOriginalName(),
+            'original_name' => $prepared['name'],
             'path' => $path,
-            'mime_type' => $file->getMimeType(),
-            'size' => $file->getSize(),
+            'mime_type' => $prepared['mime_type'],
+            'size' => $prepared['size'],
             'uploaded_by' => $userId,
         ]);
+    }
+
+    private function prepareFileForStorage(UploadedFile $file): array
+    {
+        $mimeType = $file->getMimeType() ?: 'application/octet-stream';
+        $path = $file->getRealPath();
+        $name = $this->sanitizeFileName($file->getClientOriginalName());
+
+        if (! $path || ! str_starts_with($mimeType, 'image/') || ! function_exists('imagecreatefromstring')) {
+            return [
+                'path' => $path ?: $file->getPathname(),
+                'name' => $name,
+                'mime_type' => $mimeType,
+                'size' => $file->getSize(),
+                'temporary' => false,
+            ];
+        }
+
+        $image = @imagecreatefromstring((string) file_get_contents($path));
+        if (! $image) {
+            return [
+                'path' => $path,
+                'name' => $name,
+                'mime_type' => $mimeType,
+                'size' => $file->getSize(),
+                'temporary' => false,
+            ];
+        }
+
+        $target = tempnam(sys_get_temp_dir(), 'docssalud_img_');
+        $stored = false;
+        if ($mimeType === 'image/png') {
+            imagealphablending($image, false);
+            imagesavealpha($image, true);
+            $stored = imagepng($image, $target, 7);
+        } else {
+            $stored = imagejpeg($image, $target, 78);
+            $mimeType = 'image/jpeg';
+            $name = preg_replace('/\.[^.]+$/', '.jpg', $name) ?: ($name . '.jpg');
+        }
+        imagedestroy($image);
+
+        if (! $stored) {
+            @unlink($target);
+            return [
+                'path' => $path,
+                'name' => $name,
+                'mime_type' => $file->getMimeType() ?: 'application/octet-stream',
+                'size' => $file->getSize(),
+                'temporary' => false,
+            ];
+        }
+
+        return [
+            'path' => $target,
+            'name' => $name,
+            'mime_type' => $mimeType,
+            'size' => filesize($target) ?: $file->getSize(),
+            'temporary' => true,
+        ];
+    }
+
+    private function uniqueStoragePath(string $directory, string $fileName): string
+    {
+        $disk = Storage::disk($this->documentStorageDisk());
+        $extension = pathinfo($fileName, PATHINFO_EXTENSION);
+        $baseName = pathinfo($fileName, PATHINFO_FILENAME) ?: 'archivo';
+        $candidate = trim($directory . '/' . $fileName, '/');
+        $suffix = 1;
+
+        while ($disk->exists($candidate)) {
+            $nextName = $baseName . '_' . $suffix . ($extension ? ".{$extension}" : '');
+            $candidate = trim($directory . '/' . $nextName, '/');
+            $suffix++;
+        }
+
+        return $candidate;
+    }
+
+    private function sanitizeFileName(string $name): string
+    {
+        $name = Str::of($name)->ascii()->replaceMatches('/[^A-Za-z0-9._-]+/', '_')->trim('_')->value();
+        return $name !== '' ? $name : 'archivo';
     }
 
     private function documentStorageDisk(): string

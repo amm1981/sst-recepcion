@@ -343,6 +343,8 @@ tbody tr:hover { background: #f9fafb; }
 .btn-save-large { width: 100%; padding: 16px; font-size: 16px; background: #047857; color: #ffffff; border: none; border-radius: 8px; font-weight: 700; display: flex; justify-content: center; align-items: center; gap: 12px; cursor: pointer; transition: background 0.2s; margin-top: 8px; }
 .btn-save-large:hover:not(:disabled) { background: #065f46; }
 .btn-save-large:disabled { opacity: 0.6; cursor: not-allowed; }
+.spin { animation: docssalud-spin 0.8s linear infinite; }
+@keyframes docssalud-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 1200px) {
   .new-doc-grid { grid-template-columns: 1fr 1fr; }

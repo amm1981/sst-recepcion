@@ -62,6 +62,8 @@ fun DocumentFormScreen(
     var cameraTarget by remember { mutableStateOf<PhotoTarget?>(null) }
     var pendingCameraTarget by remember { mutableStateOf<PhotoTarget?>(null) }
     var localError by remember { mutableStateOf<String?>(null) }
+    val selectedRelation = state.deliveryRelations.firstOrNull { it.id == selectedRelationId }
+    val isWorkerRelation = selectedRelation?.code == "TRABAJADOR" || selectedRelation?.name.equals("Trabajador", ignoreCase = true)
 
     val delivererPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
         if (it != null) {
@@ -118,14 +120,32 @@ fun DocumentFormScreen(
 
     LaunchedEffect(state.selectedWorker) {
         state.selectedWorker?.let {
-            delivererName = "${it.firstName} ${it.lastName}"
-            delivererDocument = it.dni
-            if (contactNumber.isBlank()) contactNumber = it.phone.orEmpty()
+            dni = it.dni
+            contactNumber = it.phone.orEmpty()
+            if (isWorkerRelation) {
+                delivererName = "${it.firstName} ${it.lastName}"
+                delivererDocument = it.dni
+            }
         }
     }
 
     LaunchedEffect(state.isSaved) {
         if (state.isSaved) onNavigateBack()
+    }
+
+    if (state.isSaving) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Registrando documento") },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp), color = PrimaryGreen)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text("Comprimiendo archivos y guardando el registro...")
+                }
+            },
+            confirmButton = {}
+        )
     }
 
     Scaffold(
@@ -158,13 +178,13 @@ fun DocumentFormScreen(
                 onSelected = { selectedTypeId = it.id }
             )
 
-            Text("DNI *", fontWeight = FontWeight.Medium)
+            Text("Trabajador *", fontWeight = FontWeight.Medium)
             Row(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = dni,
-                    onValueChange = { dni = it.filter(Char::isDigit).take(12) },
+                    onValueChange = { dni = it.take(80) },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("12345678") },
+                    placeholder = { Text("DNI, nombre o apellidos") },
                     shape = RoundedCornerShape(8.dp),
                     singleLine = true
                 )
@@ -176,6 +196,28 @@ fun DocumentFormScreen(
                     modifier = Modifier.height(56.dp)
                 ) {
                     Icon(Icons.Default.Search, contentDescription = "Buscar", tint = Color.White)
+                }
+            }
+
+            if (state.workerResults.size > 1) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.workerResults.take(5).forEach { result ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.selectWorker(result)
+                                    localError = null
+                                },
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("${result.firstName} ${result.lastName}", fontWeight = FontWeight.SemiBold)
+                                Text("DNI: ${result.dni}", fontSize = 12.sp, color = Color.Gray)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -202,9 +244,22 @@ fun DocumentFormScreen(
                 items = state.deliveryRelations,
                 selectedId = selectedRelationId,
                 placeholder = "Seleccione relación",
-                onSelected = { selectedRelationId = it.id }
+                onSelected = {
+                    selectedRelationId = it.id
+                    if (it.code == "TRABAJADOR" || it.name.equals("Trabajador", ignoreCase = true)) {
+                        state.selectedWorker?.let { worker ->
+                            delivererName = "${worker.firstName} ${worker.lastName}"
+                            delivererDocument = worker.dni
+                            contactNumber = worker.phone.orEmpty()
+                        }
+                    } else {
+                        deliveryRelationDetail = ""
+                        delivererName = ""
+                        delivererDocument = ""
+                        contactNumber = state.selectedWorker?.phone.orEmpty()
+                    }
+                }
             )
-            val selectedRelation = state.deliveryRelations.firstOrNull { it.id == selectedRelationId }
             if (selectedRelation?.requiresDetail == true) {
                 OutlinedTextField(
                     value = deliveryRelationDetail,
@@ -239,10 +294,16 @@ fun DocumentFormScreen(
                 onAttach = { delivererPicker.launch(arrayOf("image/*")) }
             )
             PhotoUploadSection(
-                title = "Foto del Documento *",
+                title = "Documento *",
                 selectedText = medicalDocumentUri?.lastPathSegment,
                 onCamera = { openCamera(PhotoTarget.Document) },
-                onAttach = { documentPicker.launch(arrayOf("image/*", "application/pdf")) }
+                onAttach = { documentPicker.launch(documentMimeTypes()) }
+            )
+
+            Text(
+                "Formatos permitidos: DOCX, PDF, JPEG, JPG, PNG. Tamano maximo por archivo: 10MB. Las imagenes se comprimen antes de subir.",
+                fontSize = 12.sp,
+                color = Color.Gray
             )
 
             OutlinedTextField(
@@ -270,7 +331,7 @@ fun DocumentFormScreen(
                 Text("${annexUris.size}/4 archivos", fontSize = 12.sp, color = Color.Gray)
             }
             OutlinedButton(
-                onClick = { annexPicker.launch(arrayOf("image/*", "application/pdf")) },
+                onClick = { annexPicker.launch(documentMimeTypes()) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp)
             ) {
@@ -306,9 +367,9 @@ fun DocumentFormScreen(
                     .height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
                 shape = RoundedCornerShape(8.dp),
-                enabled = !state.isLoading
+                enabled = !state.isLoading && !state.isSaving
             ) {
-                if (state.isLoading) {
+                if (state.isSaving) {
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
                 } else {
                     Text("Guardar Registro", fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -418,6 +479,13 @@ private fun Bitmap.toCacheUri(context: Context, fileName: String): Uri {
     }
     return Uri.fromFile(file)
 }
+
+private fun documentMimeTypes(): Array<String> = arrayOf(
+    "image/jpeg",
+    "image/png",
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+)
 
 private fun Context.persistReadPermission(uri: Uri) {
     try {

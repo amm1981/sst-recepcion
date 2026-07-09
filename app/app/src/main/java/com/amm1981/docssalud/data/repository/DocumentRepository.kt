@@ -2,6 +2,8 @@ package com.amm1981.docssalud.data.repository
 
 import android.content.Context
 import android.database.Cursor
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.amm1981.docssalud.data.api.DocsSaludApi
@@ -69,6 +71,11 @@ class DocumentRepository @Inject constructor(
     private val syncQueueDao: SyncQueueDao,
     private val api: DocsSaludApi
 ) {
+    private companion object {
+        const val MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024L
+        val ALLOWED_EXTENSIONS = setOf("docx", "pdf", "jpeg", "jpg", "png")
+    }
+
     suspend fun enqueueDocument(
         medicalDocumentTypeId: Int,
         medicalDocumentTypeName: String,
@@ -135,7 +142,7 @@ class DocumentRepository @Inject constructor(
                     delivererPhoto = item.delivererPhotoUri?.let {
                         uriPart("deliverer_photo", Uri.parse(it), "dni.jpg")
                     },
-                    medicalDocumentFile = uriPart("medical_document_file", Uri.parse(item.medicalDocumentUri), "documento.jpg"),
+                    medicalDocumentFile = uriPart("medical_document_file", Uri.parse(item.medicalDocumentUri), "documento"),
                     annexes = item.annexUris
                         .split("|")
                         .filter { it.isNotBlank() }
@@ -376,6 +383,10 @@ class DocumentRepository @Inject constructor(
     }
 
     private fun displayName(uri: Uri, fallbackName: String): String {
+        if (uri.scheme == "file") {
+            return uri.path?.let { File(it).name }?.takeIf { it.isNotBlank() } ?: fallbackName
+        }
+
         var cursor: Cursor? = null
         return try {
             cursor = context.contentResolver.query(uri, null, null, null, null)
@@ -394,7 +405,20 @@ class DocumentRepository @Inject constructor(
 
     private fun persistOfflineFile(uri: Uri, targetDir: File, fallbackName: String): Uri {
         val originalName = displayName(uri, fallbackName)
-        val targetFile = uniqueFile(targetDir, originalName.ifBlank { fallbackName })
+        validateSelectedFile(uri, originalName)
+        val mimeType = context.contentResolver.getType(uri).orEmpty()
+        val isImage = mimeType.startsWith("image/") || extension(originalName) in setOf("jpeg", "jpg", "png")
+        val targetName = if (isImage && extension(originalName) != "png") {
+            originalName.replace(Regex("\\.[^.]+$"), ".jpg").ifBlank { "$fallbackName.jpg" }
+        } else {
+            originalName.ifBlank { fallbackName }
+        }
+        val targetFile = uniqueFile(targetDir, targetName)
+
+        if (isImage && compressImageToFile(uri, targetFile, mimeType)) {
+            return Uri.fromFile(targetFile)
+        }
+
         val inputStream = if (uri.scheme == "file") {
             uri.path?.let { File(it).inputStream() }
         } else {
@@ -405,6 +429,57 @@ class DocumentRepository @Inject constructor(
         } ?: throw IllegalArgumentException("No se pudo leer el archivo seleccionado")
         return Uri.fromFile(targetFile)
     }
+
+    private fun validateSelectedFile(uri: Uri, fileName: String) {
+        val ext = extension(fileName)
+        if (ext !in ALLOWED_EXTENSIONS) {
+            throw IllegalArgumentException("Formato no permitido. Use DOCX, PDF, JPEG, JPG o PNG.")
+        }
+        val size = fileSize(uri)
+        if (size != null && size > MAX_FILE_SIZE_BYTES) {
+            throw IllegalArgumentException("El tamano maximo por archivo es 10MB.")
+        }
+    }
+
+    private fun compressImageToFile(uri: Uri, targetFile: File, mimeType: String): Boolean {
+        val bitmap = openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } ?: return false
+        return try {
+            FileOutputStream(targetFile).use { output ->
+                if (mimeType == "image/png" || targetFile.extension.equals("png", ignoreCase = true)) {
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 80, output)
+                } else {
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 78, output)
+                }
+            }
+        } finally {
+            bitmap.recycle()
+        }
+    }
+
+    private fun openInputStream(uri: Uri) = if (uri.scheme == "file") {
+        uri.path?.let { File(it).inputStream() }
+    } else {
+        context.contentResolver.openInputStream(uri)
+    }
+
+    private fun fileSize(uri: Uri): Long? {
+        if (uri.scheme == "file") {
+            return uri.path?.let { File(it).length() }
+        }
+        var cursor: Cursor? = null
+        return try {
+            cursor = context.contentResolver.query(uri, null, null, null, null)
+            val sizeIndex = cursor?.getColumnIndex(OpenableColumns.SIZE) ?: -1
+            if (cursor != null && cursor.moveToFirst() && sizeIndex >= 0) cursor.getLong(sizeIndex) else null
+        } catch (_: Exception) {
+            null
+        } finally {
+            cursor?.close()
+        }
+    }
+
+    private fun extension(fileName: String): String =
+        fileName.substringAfterLast('.', "").lowercase(Locale.US)
 
     private fun uniqueFile(targetDir: File, rawName: String): File {
         val sanitized = rawName.replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "archivo" }

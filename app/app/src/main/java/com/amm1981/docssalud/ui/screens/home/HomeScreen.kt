@@ -24,13 +24,14 @@ import com.amm1981.docssalud.ui.theme.PrimaryGreen
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
+    refreshTrigger: Int = 0,
     onOpenMenu: () -> Unit,
     onNavigateToNewRecord: () -> Unit,
     onNavigateToDocuments: () -> Unit
 ) {
     val state by viewModel.state.collectAsState()
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(refreshTrigger) {
         viewModel.loadCounts()
     }
 

@@ -190,6 +190,7 @@ fun MainScreen(
             ) {
                 composable(BottomNavItem.Home.route) {
                     HomeScreen(
+                        refreshTrigger = state.syncRevision,
                         onOpenMenu = ::openDrawer,
                         onNavigateToNewRecord = { rootNavController.navigate(Route.DocumentForm.route) },
                         onNavigateToDocuments = { navigateBottom(BottomNavItem.Documents.route) }

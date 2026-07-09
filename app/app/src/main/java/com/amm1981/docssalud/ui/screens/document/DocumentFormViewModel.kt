@@ -23,11 +23,13 @@ import javax.inject.Inject
 
 data class DocumentFormState(
     val isLoading: Boolean = false,
+    val isSaving: Boolean = false,
     val isSaved: Boolean = false,
     val error: String? = null,
     val documentTypes: List<CatalogEntity> = emptyList(),
     val deliveryRelations: List<CatalogEntity> = emptyList(),
-    val selectedWorker: WorkerEntity? = null
+    val selectedWorker: WorkerEntity? = null,
+    val workerResults: List<WorkerEntity> = emptyList()
 )
 
 @HiltViewModel
@@ -74,15 +76,27 @@ class DocumentFormViewModel @Inject constructor(
         }
     }
 
-    fun searchWorker(dni: String) {
+    fun searchWorker(query: String) {
         viewModelScope.launch {
-            val worker = workerDao.findByDni(dni.trim())
+            val term = query.trim()
+            if (term.length < 2) {
+                _state.value = _state.value.copy(selectedWorker = null, workerResults = emptyList(), error = "Ingrese DNI, nombre o apellidos.")
+                return@launch
+            }
+            val worker = workerDao.findByDni(term)
+            val results = if (worker != null) listOf(worker) else workerDao.search(term)
             _state.value = if (worker != null) {
-                _state.value.copy(selectedWorker = worker, error = null)
+                _state.value.copy(selectedWorker = worker, workerResults = results, error = null)
+            } else if (results.isNotEmpty()) {
+                _state.value.copy(selectedWorker = results.first(), workerResults = results, error = null)
             } else {
-                _state.value.copy(selectedWorker = null, error = "Trabajador no encontrado.")
+                _state.value.copy(selectedWorker = null, workerResults = emptyList(), error = "Trabajador no encontrado.")
             }
         }
+    }
+
+    fun selectWorker(worker: WorkerEntity) {
+        _state.value = _state.value.copy(selectedWorker = worker, error = null)
     }
 
     fun saveDocument(
@@ -137,7 +151,7 @@ class DocumentFormViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            _state.value = _state.value.copy(isLoading = true, error = null)
+            _state.value = _state.value.copy(isSaving = true, error = null)
             val result = documentRepository.enqueueDocument(
                 medicalDocumentTypeId = documentType.id,
                 medicalDocumentTypeName = documentType.name,
@@ -157,10 +171,10 @@ class DocumentFormViewModel @Inject constructor(
             if (result.isSuccess) {
                 val workRequest = OneTimeWorkRequestBuilder<SyncWorker>().build()
                 WorkManager.getInstance(context).enqueue(workRequest)
-                _state.value = _state.value.copy(isLoading = false, isSaved = true)
+                _state.value = _state.value.copy(isSaving = false, isSaved = true)
             } else {
                 _state.value = _state.value.copy(
-                    isLoading = false,
+                    isSaving = false,
                     error = result.exceptionOrNull()?.message ?: "Error al guardar el documento"
                 )
             }

@@ -74,16 +74,16 @@ class SyncRepository @Inject constructor(
                 val catalogEntities = mutableListOf<CatalogEntity>()
 
                 dto?.medicalDocumentTypes.orEmpty().forEach {
-                    catalogEntities.add(CatalogEntity(it.id, "DOCUMENT_TYPE", it.name, it.requiresDetail ?: false))
+                    catalogEntities.add(CatalogEntity(it.id, "DOCUMENT_TYPE", it.name, it.code, it.requiresDetail ?: false))
                 }
                 dto?.deliveryRelations.orEmpty().forEach {
-                    catalogEntities.add(CatalogEntity(it.id, "RELATION", it.name, it.requiresDetail ?: false))
+                    catalogEntities.add(CatalogEntity(it.id, "RELATION", it.name, it.code, it.requiresDetail ?: false))
                 }
                 dto?.managements.orEmpty().forEach {
-                    catalogEntities.add(CatalogEntity(it.id, "MANAGEMENT", it.name, false))
+                    catalogEntities.add(CatalogEntity(it.id, "MANAGEMENT", it.name, it.code, false))
                 }
                 dto?.sectors.orEmpty().forEach {
-                    catalogEntities.add(CatalogEntity(it.id, "SECTOR", it.name, false))
+                    catalogEntities.add(CatalogEntity(it.id, "SECTOR", it.name, it.code, false))
                 }
 
                 catalogDao.clearAll()
