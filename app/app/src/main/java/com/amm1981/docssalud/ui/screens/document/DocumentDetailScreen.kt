@@ -9,10 +9,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -53,7 +53,7 @@ fun DocumentDetailScreen(
                 title = { Text("Detalle del Documento", color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = PrimaryGreen)
@@ -248,7 +248,7 @@ fun AttachmentRow(filename: String) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-            Icon(Icons.Default.InsertDriveFile, contentDescription = null, tint = Color.Gray)
+            Icon(Icons.AutoMirrored.Filled.InsertDriveFile, contentDescription = null, tint = Color.Gray)
             Spacer(modifier = Modifier.width(8.dp))
             Text(filename, fontSize = 14.sp, maxLines = 1)
         }

@@ -8,7 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,7 +42,7 @@ fun DocumentStatusScreen(
                 title = { Text("Estado del Documento", color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Volver", tint = Color.White)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver", tint = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = PrimaryGreen)
@@ -89,7 +89,7 @@ private fun DocumentStatusContent(doc: DocumentUi, modifier: Modifier) {
             }
         }
 
-        Divider(modifier = Modifier.padding(vertical = 16.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
         Text("Estado Actual", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(bottom = 8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -104,7 +104,7 @@ private fun DocumentStatusContent(doc: DocumentUi, modifier: Modifier) {
             modifier = Modifier.padding(start = 24.dp, top = 4.dp)
         )
 
-        Divider(modifier = Modifier.padding(vertical = 16.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
         Text("Historial del Proceso", fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.padding(bottom = 16.dp))
         val history = normalizedHistory(doc)

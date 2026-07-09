@@ -23,17 +23,31 @@ import javax.inject.Singleton
 object NetworkModule {
 
     private val BASE_URL = com.amm1981.docssalud.BuildConfig.API_BASE_URL
+    private const val SECURE_PREFS_NAME = "secure_prefs"
 
     @Provides
     @Singleton
     fun provideEncryptedSharedPreferences(@ApplicationContext context: Context): SharedPreferences {
+        return createEncryptedSharedPreferences(context)
+    }
+
+    private fun createEncryptedSharedPreferences(context: Context): SharedPreferences {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
 
+        return try {
+            encryptedPrefs(context, masterKey)
+        } catch (_: Exception) {
+            context.deleteSharedPreferences(SECURE_PREFS_NAME)
+            encryptedPrefs(context, masterKey)
+        }
+    }
+
+    private fun encryptedPrefs(context: Context, masterKey: MasterKey): SharedPreferences {
         return EncryptedSharedPreferences.create(
             context,
-            "secure_prefs",
+            SECURE_PREFS_NAME,
             masterKey,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
