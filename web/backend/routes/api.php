@@ -33,12 +33,15 @@ Route::middleware('auth:sanctum')->group(function () {
         ->parameters(['medical-documents' => 'medicalDocument']);
 
     Route::get('/workers/search/{dni}', [WorkerController::class, 'searchByDni']);
+    Route::get('/workers-registered-documents', [WorkerController::class, 'registeredWithDocuments'])->middleware('permission:documents.view');
     Route::get('/workers/import-template', [WorkerController::class, 'importTemplate'])->middleware('permission:workers.manage');
     Route::post('/workers/import-excel', [WorkerController::class, 'importExcel'])->middleware('permission:workers.manage');
     Route::apiResource('workers', WorkerController::class)->except(['show']);
 
+    Route::get('/reports/registrars', [ReportController::class, 'registrars'])->middleware('permission:reports.view');
     Route::get('/reports/summary', [ReportController::class, 'summary'])->middleware('permission:reports.view');
     Route::get('/reports/export/excel', [ReportController::class, 'exportExcel'])->middleware('permission:reports.view');
+    Route::get('/reports/export/detail-excel', [ReportController::class, 'exportDetailExcel'])->middleware('permission:reports.view');
     Route::get('/reports/export/pdf', [ReportController::class, 'exportPdf'])->middleware('permission:reports.view');
 
     Route::prefix('admin')->middleware('permission:admin.manage')->group(function () {

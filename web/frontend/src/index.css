@@ -128,6 +128,22 @@ h2 { font-size: 18px; font-weight: 700; }
 .btn.danger { background: #ef4444; }
 .btn.ghost { background: transparent; color: #047857; border-color: transparent; }
 .btn.ghost:hover { background: #f0fdf4; }
+.icon-btn.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: inherit;
+  box-shadow: none;
+}
+.icon-btn.ghost:hover {
+  background: transparent;
+  border-color: transparent;
+  color: #047857;
+}
+.icon-btn.ghost svg {
+  display: block;
+  color: currentColor;
+  stroke: currentColor;
+}
 .btn:disabled { cursor: not-allowed; opacity: 0.6; }
 .icon-btn { width: 40px; padding: 0; }
 

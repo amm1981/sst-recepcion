@@ -5,12 +5,14 @@ import { FilterSelect } from '../components/FilterSelect'
 import { FileText, Clock, Inbox, CheckCircle2, XCircle, FileSpreadsheet, Upload } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, LineChart, Line } from 'recharts'
 import { useMemo, useState } from 'react'
+import type { RegistrarSummary } from '../types'
 
 type ReportSummary = {
   total: number
   by_status: { status: string; total: number }[]
   by_type: { name: string; total: number; pendientes: number; recepcionados: number; registrados: number; rechazados: number }[]
   monthly: { month: string; total: number }[]
+  by_creator: { id: number; name: string; user?: string; email: string; total: number }[]
 }
 
 type Catalogs = {
@@ -26,7 +28,8 @@ export function ReportsPage() {
     type_id: '',
     status: '',
     management_id: '',
-    sector_id: ''
+    sector_id: '',
+    created_by: ''
   })
   
   const catalogs = useQuery({
@@ -44,7 +47,18 @@ export function ReportsPage() {
       if (filters.status) params.append('status', filters.status)
       if (filters.management_id) params.append('management_id', filters.management_id)
       if (filters.sector_id) params.append('sector_id', filters.sector_id)
+      if (filters.created_by) params.append('created_by', filters.created_by)
       return (await api.get<ReportSummary>(`/reports/summary?${params.toString()}`)).data
+    },
+  })
+
+  const registrars = useQuery({
+    queryKey: ['report-registrars', filters.from, filters.to],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (filters.from) params.append('from', filters.from)
+      if (filters.to) params.append('to', filters.to)
+      return (await api.get<RegistrarSummary[]>(`/reports/registrars?${params.toString()}`)).data
     },
   })
 
@@ -110,6 +124,24 @@ export function ReportsPage() {
     }
   }
 
+  const handleExportDetailExcel = async () => {
+    try {
+      const params = buildReportParams(filters)
+
+      const response = await api.get(`/reports/export/detail-excel?${params.toString()}`, { responseType: 'blob' })
+      const url = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', 'detalle_documentos.xlsx')
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (e) {
+      console.error('Error exporting detail excel', e)
+    }
+  }
+
   const monthlyData = useMemo(
     () => report.data?.monthly.map(item => ({
       month: item.month,
@@ -162,6 +194,15 @@ export function ReportsPage() {
             />
           </div>
           <div className="field">
+            <label>Usuario Registrador</label>
+            <FilterSelect
+              value={filters.created_by}
+              onChange={val => setFilters({...filters, created_by: val})}
+              options={registrars.data?.map(user => ({ value: String(user.id), label: `${user.name} (${user.documents_count ?? 0})` })) || []}
+              placeholder="Todos los usuarios"
+            />
+          </div>
+          <div className="field">
             <label>Gerencia</label>
             <FilterSelect 
               value={filters.management_id}
@@ -183,6 +224,7 @@ export function ReportsPage() {
         <div className="report-filters-actions">
           <button className="btn" onClick={handleGenerate}><Upload size={18} style={{ transform: 'rotate(180deg)' }} /> Generar Reporte</button>
           <button className="btn btn-export" onClick={handleExportExcel}><FileSpreadsheet size={18} /> Exportar Excel</button>
+          <button className="btn btn-export" onClick={handleExportDetailExcel}><FileSpreadsheet size={18} /> Exportar Detalle</button>
           <button className="btn btn-export" onClick={handleExportPdf}><FileText size={18} /> Exportar PDF</button>
         </div>
       </div>
@@ -307,6 +349,35 @@ export function ReportsPage() {
           </div>
         </div>
       </div>
+
+      <div className="grid hero" style={{ marginTop: 24 }}>
+        <div className="report-panel">
+          <h2>Documentos por Usuario Registrador</h2>
+          <div className="report-panel-content" style={{ justifyContent: 'flex-start', overflow: 'auto' }}>
+            <table className="report-table">
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Correo</th>
+                  <th>Total documentos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.data?.by_creator.map(item => (
+                  <tr key={item.id}>
+                    <td>{item.name}</td>
+                    <td>{item.email}</td>
+                    <td className="num">{item.total}</td>
+                  </tr>
+                ))}
+                {report.data?.by_creator?.length === 0 ? (
+                  <tr><td colSpan={3}>Sin resultados para los filtros seleccionados.</td></tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -318,6 +389,7 @@ function buildReportParams(filters: {
   status: string
   management_id: string
   sector_id: string
+  created_by: string
 }) {
   const params = new URLSearchParams()
   if (filters.from) params.append('from', filters.from)
@@ -326,5 +398,6 @@ function buildReportParams(filters: {
   if (filters.status) params.append('status', filters.status)
   if (filters.management_id) params.append('management_id', filters.management_id)
   if (filters.sector_id) params.append('sector_id', filters.sector_id)
+  if (filters.created_by) params.append('created_by', filters.created_by)
   return params
 }

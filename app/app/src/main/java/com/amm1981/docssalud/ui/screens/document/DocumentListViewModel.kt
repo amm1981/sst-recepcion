@@ -3,8 +3,10 @@ package com.amm1981.docssalud.ui.screens.document
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.amm1981.docssalud.data.connectivity.ConnectivityMonitor
+import com.amm1981.docssalud.data.repository.AuthRepository
 import com.amm1981.docssalud.data.repository.DocumentRepository
 import com.amm1981.docssalud.data.repository.DocumentUi
+import com.amm1981.docssalud.data.repository.RegistrarUi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,12 +22,18 @@ data class DocumentListState(
     val isUploading: Boolean = false,
     val pendingUploadCount: Int = 0,
     val documents: List<DocumentUi> = emptyList(),
+    val registrars: List<RegistrarUi> = emptyList(),
+    val canFilterByRegistrar: Boolean = false,
+    val dateFrom: String = "",
+    val dateTo: String = "",
+    val createdBy: Int? = null,
     val error: String? = null,
     val message: String? = null
 )
 
 @HiltViewModel
 class DocumentListViewModel @Inject constructor(
+    private val authRepository: AuthRepository,
     private val documentRepository: DocumentRepository,
     private val connectivityMonitor: ConnectivityMonitor
 ) : ViewModel() {
@@ -34,8 +42,10 @@ class DocumentListViewModel @Inject constructor(
     val state: StateFlow<DocumentListState> = _state.asStateFlow()
 
     init {
+        _state.value = _state.value.copy(canFilterByRegistrar = authRepository.canFilterByRegistrar())
         observeConnectivity()
         refreshPendingUploadCount()
+        loadRegistrars()
     }
 
     private fun observeConnectivity() {
@@ -64,7 +74,13 @@ class DocumentListViewModel @Inject constructor(
                 error = null
             )
 
-            val result = documentRepository.getDocuments(status)
+            val filters = _state.value
+            val result = documentRepository.getDocuments(
+                status = status,
+                dateFrom = filters.dateFrom,
+                dateTo = filters.dateTo,
+                createdBy = filters.createdBy
+            )
             _state.value = result.fold(
                 onSuccess = {
                     _state.value.copy(
@@ -119,6 +135,36 @@ class DocumentListViewModel @Inject constructor(
                 message = message
             )
             loadDocuments(currentStatus)
+        }
+    }
+
+    fun updateDateFrom(value: String) {
+        _state.value = _state.value.copy(dateFrom = value)
+        loadRegistrars()
+    }
+
+    fun updateDateTo(value: String) {
+        _state.value = _state.value.copy(dateTo = value)
+        loadRegistrars()
+    }
+
+    fun updateCreatedBy(value: Int?) {
+        _state.value = _state.value.copy(createdBy = value)
+    }
+
+    fun clearFilters() {
+        _state.value = _state.value.copy(dateFrom = "", dateTo = "", createdBy = null)
+        loadRegistrars()
+    }
+
+    private fun loadRegistrars() {
+        if (!_state.value.canFilterByRegistrar) return
+
+        viewModelScope.launch {
+            val filters = _state.value
+            documentRepository.getRegistrars(filters.dateFrom, filters.dateTo).onSuccess { registrars ->
+                _state.value = _state.value.copy(registrars = registrars)
+            }
         }
     }
 

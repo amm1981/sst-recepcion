@@ -4,6 +4,7 @@ import {
   ChevronDown,
   CheckCheck,
   ClipboardList,
+  FileCheck2,
   ExternalLink,
   Home,
   LogOut,
@@ -22,6 +23,7 @@ import type { NotificationItem } from '../types'
 const navItems = [
   { to: '/dashboard', label: 'Inicio', icon: Home },
   { to: '/documents', label: 'Documentos', icon: ClipboardList, permission: 'documents.view' },
+  { to: '/registered-workers', label: 'Trabajadores registrados', icon: FileCheck2, permission: 'documents.view' },
   { to: '/workers', label: 'Trabajadores', icon: UsersRound, permission: 'workers.manage' },
   { to: '/reports', label: 'Reportes', icon: BarChart3, permission: 'reports.view' },
   { to: '/admin', label: 'Administración', icon: Settings, permission: 'admin.manage' },

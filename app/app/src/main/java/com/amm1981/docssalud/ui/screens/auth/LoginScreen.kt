@@ -33,7 +33,7 @@ fun LoginScreen(
     }
 
     LaunchedEffect(authState) {
-        if (authState is AuthState.Success) {
+        if (authState is AuthState.Success || authState is AuthState.Warning) {
             onLoginSuccess()
         }
     }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
@@ -120,6 +121,22 @@ fun DocumentListScreen(
                     color = PrimaryGreen
                 )
             }
+            if (state.canFilterByRegistrar) {
+                DocumentFilters(
+                    dateFrom = state.dateFrom,
+                    dateTo = state.dateTo,
+                    selectedRegistrarId = state.createdBy,
+                    registrars = state.registrars,
+                    onDateFromChange = viewModel::updateDateFrom,
+                    onDateToChange = viewModel::updateDateTo,
+                    onRegistrarChange = viewModel::updateCreatedBy,
+                    onApply = { viewModel.loadDocuments(tabs[selectedTabIndex].status) },
+                    onClear = {
+                        viewModel.clearFilters()
+                        viewModel.loadDocuments(tabs[selectedTabIndex].status)
+                    }
+                )
+            }
 
             when {
                 state.isLoading && state.documents.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -141,6 +158,95 @@ fun DocumentListScreen(
                         DocumentCard(doc = doc, onClick = { onNavigateToDetail(doc.id) })
                     }
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DocumentFilters(
+    dateFrom: String,
+    dateTo: String,
+    selectedRegistrarId: Int?,
+    registrars: List<com.amm1981.docssalud.data.repository.RegistrarUi>,
+    onDateFromChange: (String) -> Unit,
+    onDateToChange: (String) -> Unit,
+    onRegistrarChange: (Int?) -> Unit,
+    onApply: () -> Unit,
+    onClear: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedRegistrar = registrars.firstOrNull { it.id == selectedRegistrarId }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Default.FilterList, contentDescription = null, tint = PrimaryGreen, modifier = Modifier.size(18.dp))
+            Text("Filtros", fontWeight = FontWeight.Bold, color = PrimaryGreen)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = dateFrom,
+                onValueChange = onDateFromChange,
+                label = { Text("Desde") },
+                placeholder = { Text("YYYY-MM-DD") },
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+            OutlinedTextField(
+                value = dateTo,
+                onValueChange = onDateToChange,
+                label = { Text("Hasta") },
+                placeholder = { Text("YYYY-MM-DD") },
+                singleLine = true,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded }
+        ) {
+            OutlinedTextField(
+                value = selectedRegistrar?.let { "${it.name} (${it.documentsCount})" } ?: "Todos los usuarios",
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Usuario registrador") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier
+                    .menuAnchor()
+                    .fillMaxWidth()
+            )
+            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                DropdownMenuItem(
+                    text = { Text("Todos los usuarios") },
+                    onClick = {
+                        onRegistrarChange(null)
+                        expanded = false
+                    }
+                )
+                registrars.forEach { registrar ->
+                    DropdownMenuItem(
+                        text = { Text("${registrar.name} (${registrar.documentsCount})") },
+                        onClick = {
+                            onRegistrarChange(registrar.id)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = onClear, modifier = Modifier.weight(1f)) {
+                Text("Limpiar")
+            }
+            Button(onClick = onApply, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen)) {
+                Text("Aplicar")
             }
         }
     }

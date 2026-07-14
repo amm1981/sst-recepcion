@@ -20,6 +20,8 @@ class AuthRepository @Inject constructor(
                     .putString("auth_token", body.token)
                     .putString("user_name", body.user.name)
                     .putString("user_email", body.user.email)
+                    .putString("role_code", body.user.role?.code.orEmpty())
+                    .putStringSet("permissions", body.user.permissions.orEmpty().toSet())
                     .apply()
                 Result.success(Unit)
             } else {
@@ -42,6 +44,8 @@ class AuthRepository @Inject constructor(
                 prefs.edit()
                     .putString("user_name", user.name)
                     .putString("user_email", user.email)
+                    .putString("role_code", user.role?.code.orEmpty())
+                    .putStringSet("permissions", user.permissions.orEmpty().toSet())
                     .apply()
                 Result.success(Unit)
             } else {
@@ -60,7 +64,21 @@ class AuthRepository @Inject constructor(
         return prefs.getString("user_email", null) ?: ""
     }
 
+    fun roleCode(): String {
+        return prefs.getString("role_code", null).orEmpty().uppercase()
+    }
+
+    fun canFilterByRegistrar(): Boolean {
+        return roleCode() in setOf("ADMIN", "SST")
+    }
+
     fun logout() {
-        prefs.edit().remove("auth_token").remove("user_name").remove("user_email").apply()
+        prefs.edit()
+            .remove("auth_token")
+            .remove("user_name")
+            .remove("user_email")
+            .remove("role_code")
+            .remove("permissions")
+            .apply()
     }
 }

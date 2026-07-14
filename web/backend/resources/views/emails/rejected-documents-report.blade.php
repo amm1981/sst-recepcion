@@ -40,21 +40,26 @@
                             <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-collapse:collapse; font-size:13px;">
                                 <thead>
                                     <tr>
-                                        <th style="padding:11px 10px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Documento</th>
-                                        <th style="padding:11px 10px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Tipo</th>
-                                        <th style="padding:11px 10px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Trabajador</th>
-                                        <th style="padding:11px 10px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">DNI</th>
-                                        <th style="padding:11px 10px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Rechazado por</th>
+                                        <th style="padding:11px 8px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">ID de documento</th>
+                                        <th style="padding:11px 8px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">DNI de trabajador</th>
+                                        <th style="padding:11px 8px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Nombre de trabajador</th>
+                                        <th style="padding:11px 8px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Tipo de documento</th>
+                                        <th style="padding:11px 8px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Estado</th>
+                                        <th style="padding:11px 8px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Motivo de rechazo</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     @foreach($documents as $doc)
+                                        @php
+                                            $rejectionReason = $doc->history?->firstWhere('to_status', 'RECHAZADO')?->observation;
+                                        @endphp
                                         <tr>
-                                            <td style="padding:12px 10px; border-bottom:1px solid #f3f4f6; color:#111827; font-weight:700;">#{{ $doc->id }}</td>
-                                            <td style="padding:12px 10px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ $doc->type?->name ?? '-' }}</td>
-                                            <td style="padding:12px 10px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ trim(($doc->worker?->first_name ?? '') . ' ' . ($doc->worker?->last_name ?? '')) ?: '-' }}</td>
-                                            <td style="padding:12px 10px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ $doc->worker?->dni ?? '-' }}</td>
-                                            <td style="padding:12px 10px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ $doc->statusChangedBy?->name ?? '-' }}</td>
+                                            <td style="padding:12px 8px; border-bottom:1px solid #f3f4f6; color:#111827; font-weight:700;">#{{ $doc->id }}</td>
+                                            <td style="padding:12px 8px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ $doc->worker?->dni ?? '-' }}</td>
+                                            <td style="padding:12px 8px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ trim(($doc->worker?->first_name ?? '') . ' ' . ($doc->worker?->last_name ?? '')) ?: '-' }}</td>
+                                            <td style="padding:12px 8px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ $doc->type?->name ?? '-' }}</td>
+                                            <td style="padding:12px 8px; border-bottom:1px solid #f3f4f6; color:#b91c1c; font-weight:700;">{{ $doc->status ?? 'RECHAZADO' }}</td>
+                                            <td style="padding:12px 8px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ $rejectionReason ?: '-' }}</td>
                                         </tr>
                                     @endforeach
                                 </tbody>

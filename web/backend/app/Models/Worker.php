@@ -29,7 +29,13 @@ class Worker extends Model
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return [
+            'is_active' => 'boolean',
+            'hire_date' => 'date',
+            'termination_date' => 'date',
+            'external_updated_at' => 'datetime',
+            'external_payload' => 'array',
+        ];
     }
 
     public function management()
@@ -40,5 +46,10 @@ class Worker extends Model
     public function sector()
     {
         return $this->belongsTo(Sector::class);
+    }
+
+    public function medicalDocuments()
+    {
+        return $this->hasMany(MedicalDocument::class);
     }
 }

@@ -40,6 +40,14 @@ class MedicalDocumentController extends Controller
             $query->where('created_at', '>=', $request->date('date_from')->startOfDay());
         }
 
+        if ($request->filled('date_to')) {
+            $query->where('created_at', '<=', $request->date('date_to')->endOfDay());
+        }
+
+        if ($request->filled('created_by')) {
+            $query->where('created_by', $request->integer('created_by'));
+        }
+
         if ($request->filled('q')) {
             $q = $request->string('q');
             $query->where(function ($sub) use ($q) {

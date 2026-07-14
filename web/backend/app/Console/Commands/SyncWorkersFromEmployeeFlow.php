@@ -166,7 +166,7 @@ class SyncWorkersFromEmployeeFlow extends Command
                         $worker->hire_date = $hireDate;
                         $worker->termination_date = $terminationDate;
                         $worker->external_updated_at = $externalUpdatedAt;
-                        $worker->external_payload = json_encode($item);
+                        $worker->external_payload = $item;
 
                         if ($worker->trashed() && $isActive) {
                             $worker->restore();
@@ -189,7 +189,7 @@ class SyncWorkersFromEmployeeFlow extends Command
                             'hire_date' => $hireDate,
                             'termination_date' => $terminationDate,
                             'external_updated_at' => $externalUpdatedAt,
-                            'external_payload' => json_encode($item),
+                            'external_payload' => $item,
                         ]);
 
                         $log->created_count++;

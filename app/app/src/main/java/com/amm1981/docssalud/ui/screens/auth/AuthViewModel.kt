@@ -16,6 +16,7 @@ sealed class AuthState {
     object Loading : AuthState()
     object Success : AuthState()
     data class Error(val message: String) : AuthState()
+    data class Warning(val message: String) : AuthState()
 }
 
 @HiltViewModel
@@ -40,10 +41,12 @@ class AuthViewModel @Inject constructor(
             if (result.isSuccess) {
                 // Sincronizar catálogos y trabajadores después de loguearse exitosamente
                 val syncResult = syncRepository.syncAll(forceWorkers = true)
-                if (syncResult.isSuccess) {
-                    _authState.value = AuthState.Success
+                _authState.value = if (syncResult.isSuccess) {
+                    AuthState.Success
                 } else {
-                    _authState.value = AuthState.Error("Error al sincronizar datos iniciales: ${syncResult.exceptionOrNull()?.message}")
+                    AuthState.Warning(
+                        "Sesion iniciada. No se pudo sincronizar la Data Maestra inicial: ${syncResult.exceptionOrNull()?.message ?: "reintente desde el menu lateral."}"
+                    )
                 }
             } else {
                 _authState.value = AuthState.Error(result.exceptionOrNull()?.message ?: "Error desconocido")

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
-import { Calendar, Upload, RefreshCw, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
+import { Calendar, FileSpreadsheet, Upload, RefreshCw, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, getErrorMessage } from '../api/client'
@@ -9,7 +9,8 @@ import { DataTable } from '../components/DataTable'
 import { Modal } from '../components/Modal'
 import { SearchBar } from '../components/SearchBar'
 import { StatusBadge } from '../components/StatusBadge'
-import type { MedicalDocument, Paginated, Status } from '../types'
+import { FilterSelect } from '../components/FilterSelect'
+import type { MedicalDocument, Paginated, RegistrarSummary, Status } from '../types'
 
 const DATE_RANGES = [
   { label: 'Últimos 7 días', days: 7 },
@@ -24,6 +25,8 @@ export function DocumentsPage() {
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
   const [dateRange, setDateRange] = useState(30)
+  const [dateTo, setDateTo] = useState('')
+  const [createdBy, setCreatedBy] = useState('')
   const [selected, setSelected] = useState<MedicalDocument | null>(null)
   const perPage = 15
 
@@ -31,8 +34,19 @@ export function DocumentsPage() {
     ? new Date(Date.now() - dateRange * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     : undefined
 
+  const registrars = useQuery({
+    queryKey: ['document-registrars', dateFrom, dateTo],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (dateFrom) params.set('date_from', dateFrom)
+      if (dateTo) params.set('date_to', dateTo)
+      return (await api.get<RegistrarSummary[]>(`/reports/registrars?${params.toString()}`)).data
+    },
+    enabled: can('reports.view'),
+  })
+
   const documents = useQuery({
-    queryKey: ['documents', status, q, page, dateFrom],
+    queryKey: ['documents', status, q, page, dateFrom, dateTo, createdBy],
     queryFn: async () =>
       (
         await api.get<Paginated<MedicalDocument>>('/medical-documents', {
@@ -42,6 +56,8 @@ export function DocumentsPage() {
             per_page: perPage,
             page,
             date_from: dateFrom,
+            date_to: dateTo || undefined,
+            created_by: createdBy || undefined,
           },
         })
       ).data,
@@ -88,11 +104,30 @@ export function DocumentsPage() {
     if (status !== 'TODOS') params.set('status', status)
     if (q) params.set('q', q)
     if (dateFrom) params.set('date_from', dateFrom)
+    if (dateTo) params.set('date_to', dateTo)
+    if (createdBy) params.set('created_by', createdBy)
     api.get('/reports/export/excel', { params, responseType: 'blob' }).then((res) => {
       const url = URL.createObjectURL(res.data)
       const anchor = document.createElement('a')
       anchor.href = url
       anchor.download = `documentos_${new Date().toISOString().split('T')[0]}.xlsx`
+      anchor.click()
+      URL.revokeObjectURL(url)
+    })
+  }
+
+  function handleExportDetail() {
+    const params = new URLSearchParams()
+    if (status !== 'TODOS') params.set('status', status)
+    if (q) params.set('q', q)
+    if (dateFrom) params.set('date_from', dateFrom)
+    if (dateTo) params.set('date_to', dateTo)
+    if (createdBy) params.set('created_by', createdBy)
+    api.get('/reports/export/detail-excel', { params, responseType: 'blob' }).then((res) => {
+      const url = URL.createObjectURL(res.data)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `detalle_documentos_${new Date().toISOString().split('T')[0]}.xlsx`
       anchor.click()
       URL.revokeObjectURL(url)
     })
@@ -133,6 +168,10 @@ export function DocumentsPage() {
               <Upload size={18} />
               Exportar
             </button>
+            <button className="btn ghost" style={{ color: '#047857', padding: '8px 12px' }} onClick={handleExportDetail}>
+              <FileSpreadsheet size={18} />
+              Detalle
+            </button>
           </div>
         </div>
 
@@ -160,6 +199,21 @@ export function DocumentsPage() {
                   </select>
                 </div>
               </div>
+              <div className="field" style={{ width: 'auto', minWidth: 170 }}>
+                <label>Fecha hasta</label>
+                <input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1) }} />
+              </div>
+              {can('reports.view') ? (
+                <div className="field" style={{ width: 'auto', minWidth: 220 }}>
+                  <label>Usuario registrador</label>
+                  <FilterSelect
+                    value={createdBy}
+                    onChange={(value) => { setCreatedBy(value); setPage(1) }}
+                    options={registrars.data?.map((user) => ({ value: String(user.id), label: `${user.name} (${user.documents_count ?? 0})` })) ?? []}
+                    placeholder="Todos los usuarios"
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
 

@@ -162,6 +162,20 @@ export type MedicalDocument = {
   history?: MedicalDocumentHistory[]
 }
 
+export type RegistrarSummary = Pick<User, 'id' | 'user' | 'name' | 'email'> & {
+  documents_count?: number
+}
+
+export type RegisteredWorker = Worker & {
+  area?: string | null
+  fundo?: string | null
+  source?: string | null
+  hire_date?: string | null
+  termination_date?: string | null
+  documents_count: number
+  documents: MedicalDocument[]
+}
+
 export type Paginated<T> = {
   data: T[]
   current_page: number

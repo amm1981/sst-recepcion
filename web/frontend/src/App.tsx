@@ -10,6 +10,7 @@ import { NewDocumentPage } from './pages/NewDocumentPage'
 import { NotificationsPage } from './pages/NotificationsPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { ReportsPage } from './pages/ReportsPage'
+import { RegisteredWorkersPage } from './pages/RegisteredWorkersPage'
 import { WorkersPage } from './pages/WorkersPage'
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/documents/:id" element={<DocumentDetailPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/workers" element={<WorkersPage />} />
+          <Route path="/registered-workers" element={<RegisteredWorkersPage />} />
           <Route path="/reports" element={<ReportsPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/profile" element={<ProfilePage />} />

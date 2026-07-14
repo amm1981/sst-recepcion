@@ -8,6 +8,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import com.amm1981.docssalud.data.api.DocsSaludApi
 import com.amm1981.docssalud.data.api.MedicalDocumentDto
+import com.amm1981.docssalud.data.api.RegistrarDto
 import com.amm1981.docssalud.data.local.dao.SyncQueueDao
 import com.amm1981.docssalud.data.local.entity.SyncQueueEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -63,6 +64,13 @@ data class DocumentCounts(
     val received: Int = 0,
     val registered: Int = 0,
     val rejected: Int = 0
+)
+
+data class RegistrarUi(
+    val id: Int,
+    val name: String,
+    val email: String,
+    val documentsCount: Int
 )
 
 @Singleton
@@ -194,9 +202,20 @@ class DocumentRepository @Inject constructor(
         )
     }
 
-    suspend fun getDocuments(status: String): Result<List<DocumentUi>> = withContext(Dispatchers.IO) {
+    suspend fun getDocuments(
+        status: String,
+        dateFrom: String? = null,
+        dateTo: String? = null,
+        createdBy: Int? = null
+    ): Result<List<DocumentUi>> = withContext(Dispatchers.IO) {
         try {
-            val remoteResponse = api.getDocuments(status = status, perPage = 100)
+            val remoteResponse = api.getDocuments(
+                status = status,
+                dateFrom = dateFrom?.takeIf { it.isNotBlank() },
+                dateTo = dateTo?.takeIf { it.isNotBlank() },
+                createdBy = createdBy,
+                perPage = 100
+            )
             val remoteDtos = if (remoteResponse.isSuccessful) {
                 remoteResponse.body()?.data.orEmpty()
             } else {
@@ -222,6 +241,22 @@ class DocumentRepository @Inject constructor(
             } else {
                 Result.success(emptyList()) // No remote data available offline for other statuses
             }
+        }
+    }
+
+    suspend fun getRegistrars(dateFrom: String? = null, dateTo: String? = null): Result<List<RegistrarUi>> = withContext(Dispatchers.IO) {
+        try {
+            val response = api.getRegistrars(
+                dateFrom = dateFrom?.takeIf { it.isNotBlank() },
+                dateTo = dateTo?.takeIf { it.isNotBlank() }
+            )
+            if (response.isSuccessful) {
+                Result.success(response.body().orEmpty().map { it.toUi() })
+            } else {
+                Result.failure(Exception("No se pudieron cargar los registradores."))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -326,6 +361,15 @@ class DocumentRepository @Inject constructor(
                     userName = it.user?.name
                 )
             }
+        )
+    }
+
+    private fun RegistrarDto.toUi(): RegistrarUi {
+        return RegistrarUi(
+            id = id,
+            name = name,
+            email = email,
+            documentsCount = documentsCount
         )
     }
 

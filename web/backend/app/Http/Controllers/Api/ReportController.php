@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\MedicalDocument;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\URL;
 
 class ReportController extends Controller
 {
@@ -18,8 +20,13 @@ class ReportController extends Controller
             $query->whereDate('medical_documents.created_at', '>=', $request->date($fromField));
         }
         
-        $query->when($request->filled('to'), function ($q) use ($request) {
-            $q->whereDate('medical_documents.created_at', '<=', $request->date('to'));
+        if ($request->filled('date_to') || $request->filled('to')) {
+            $toField = $request->filled('date_to') ? 'date_to' : 'to';
+            $query->whereDate('medical_documents.created_at', '<=', $request->date($toField));
+        }
+
+        $query->when($request->filled('created_by'), function ($q) use ($request) {
+            $q->where('medical_documents.created_by', $request->integer('created_by'));
         });
 
         $query->when($request->filled('type_id'), function ($q) use ($request) {
@@ -95,7 +102,46 @@ class ReportController extends Controller
                 ->groupBy('month')
                 ->orderBy('month')
                 ->get(),
+            'by_creator' => (clone $base)
+                ->join('users', 'users.id', '=', 'medical_documents.created_by')
+                ->select(
+                    'users.id',
+                    'users.name',
+                    'users.user',
+                    'users.email',
+                    DB::raw('count(*) as total')
+                )
+                ->groupBy('users.id', 'users.name', 'users.user', 'users.email')
+                ->orderByDesc('total')
+                ->get(),
         ]);
+    }
+
+    public function registrars(Request $request)
+    {
+        $query = MedicalDocument::query();
+        $this->applyFilters($query, $request);
+
+        $creatorIds = (clone $query)
+            ->select('medical_documents.created_by as created_by', DB::raw('count(*) as total'))
+            ->groupBy('medical_documents.created_by')
+            ->pluck('total', 'created_by');
+
+        $users = User::query()
+            ->with('role')
+            ->whereIn('id', $creatorIds->keys())
+            ->orderBy('name')
+            ->get()
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'user' => $user->user,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'documents_count' => (int) ($creatorIds[$user->id] ?? 0),
+            ]);
+
+        return response()->json($users->values());
     }
 
     public function exportExcel(Request $request)
@@ -163,6 +209,123 @@ class ReportController extends Controller
         $writer->save($tempFile);
 
         return response()->download($tempFile, 'reporte.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    public function exportDetailExcel(Request $request)
+    {
+        $base = MedicalDocument::with([
+            'type',
+            'worker.management',
+            'worker.sector',
+            'deliveryRelation',
+            'creator',
+            'statusChangedBy',
+            'files',
+            'history.user',
+        ]);
+        $base = $this->applyFilters($base, $request);
+
+        $documents = $base->latest('medical_documents.created_at')->get();
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Detalle');
+
+        $headers = [
+            'ID Documento',
+            'Fecha registro',
+            'Usuario registrador',
+            'Usuario registrador correo',
+            'Tipo de documento',
+            'Estado',
+            'Motivo de rechazo',
+            'DNI trabajador',
+            'Nombre trabajador',
+            'Correo trabajador',
+            'Telefono trabajador',
+            'Cargo',
+            'Area/Gerencia',
+            'Sector',
+            'Fundo',
+            'Fecha ingreso',
+            'Fecha cese',
+            'Relacion entrega',
+            'Detalle relacion',
+            'Nombre entregante',
+            'Documento entregante',
+            'Contacto',
+            'Observacion',
+            'Archivos adjuntos',
+            'Enlaces de descarga',
+            'Enlaces de vista previa',
+        ];
+
+        foreach ($headers as $index => $header) {
+            $sheet->setCellValue([$index + 1, 1], $header);
+            $sheet->getStyle([$index + 1, 1])->getFont()->setBold(true);
+            $sheet->getColumnDimensionByColumn($index + 1)->setAutoSize(true);
+        }
+
+        $row = 2;
+        foreach ($documents as $document) {
+            $worker = $document->worker;
+            $payload = is_array($worker?->external_payload) ? $worker->external_payload : [];
+            $workerName = trim((string) ($worker?->first_name ?? '') . ' ' . (string) ($worker?->last_name ?? ''));
+            $rejectionReason = $document->history
+                ->firstWhere('to_status', MedicalDocument::STATUS_REJECTED)
+                ?->observation;
+            $downloadLinks = $document->files
+                ->map(fn ($file) => URL::to("/api/medical-documents/files/{$file->id}/download"))
+                ->implode("\n");
+            $previewLinks = $document->files
+                ->map(fn ($file) => URL::to("/api/medical-documents/files/{$file->id}/preview"))
+                ->implode("\n");
+
+            $values = [
+                $document->id,
+                optional($document->created_at)->format('d/m/Y H:i'),
+                $document->creator?->name,
+                $document->creator?->email,
+                $document->type?->name,
+                $document->status,
+                $rejectionReason,
+                $worker?->dni,
+                $workerName,
+                $worker?->email,
+                $worker?->phone,
+                $worker?->position,
+                $payload['area_desc'] ?? $worker?->management?->name,
+                $worker?->sector?->name,
+                $payload['fundo'] ?? $payload['sede'] ?? $worker?->sector?->name,
+                optional($worker?->hire_date)->format('d/m/Y'),
+                optional($worker?->termination_date)->format('d/m/Y'),
+                $document->deliveryRelation?->name,
+                $document->delivery_relation_detail,
+                $document->deliverer_name,
+                $document->deliverer_document,
+                $document->contact_number,
+                $document->observation,
+                $document->files->map(fn ($file) => "{$file->file_type}: {$file->original_name}")->implode("\n"),
+                $downloadLinks,
+                $previewLinks,
+            ];
+
+            foreach ($values as $index => $value) {
+                $sheet->setCellValue([$index + 1, $row], $value);
+            }
+            $sheet->getStyle("A{$row}:Z{$row}")->getAlignment()->setWrapText(true);
+            $row++;
+        }
+
+        $sheet->freezePane('A2');
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $tempFile = tempnam(sys_get_temp_dir(), 'excel');
+        $writer->save($tempFile);
+
+        return response()->download($tempFile, 'detalle_documentos.xlsx', [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
     }

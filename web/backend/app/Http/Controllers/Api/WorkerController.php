@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Worker;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Validation\Rule;
 
 class WorkerController extends Controller
@@ -78,6 +79,66 @@ class WorkerController extends Controller
             ->firstOrFail();
 
         return response()->json($worker);
+    }
+
+    public function registeredWithDocuments(Request $request)
+    {
+        $user = $request->user();
+
+        $documentFilter = function ($query) use ($request, $user) {
+            if (! $user->hasRole('ADMIN') && ! $user->hasRole('SST')) {
+                $query->where('medical_documents.created_by', $user->id);
+            }
+
+            if ($request->filled('created_by')) {
+                $query->where('medical_documents.created_by', $request->integer('created_by'));
+            }
+
+            if ($request->filled('date_from') || $request->filled('from')) {
+                $fromField = $request->filled('date_from') ? 'date_from' : 'from';
+                $query->whereDate('medical_documents.created_at', '>=', $request->date($fromField));
+            }
+
+            if ($request->filled('date_to') || $request->filled('to')) {
+                $toField = $request->filled('date_to') ? 'date_to' : 'to';
+                $query->whereDate('medical_documents.created_at', '<=', $request->date($toField));
+            }
+        };
+        $documentDetail = function ($query) use ($documentFilter) {
+            $documentFilter($query);
+            $query->with(['type', 'deliveryRelation', 'creator', 'files'])
+                ->latest('medical_documents.created_at');
+        };
+
+        $query = Worker::query()
+            ->with(['management', 'sector'])
+            ->withCount(['medicalDocuments as documents_count' => $documentFilter])
+            ->with(['medicalDocuments' => $documentDetail])
+            ->whereHas('medicalDocuments', $documentFilter)
+            ->latest('workers.updated_at');
+
+        if ($request->filled('q')) {
+            $q = $request->string('q');
+            $query->where(fn ($sub) => $sub
+                ->where('dni', 'like', "%{$q}%")
+                ->orWhere('first_name', 'like', "%{$q}%")
+                ->orWhere('last_name', 'like', "%{$q}%")
+                ->orWhere('position', 'like', "%{$q}%"));
+        }
+
+        if ($request->filled('management_id')) {
+            $query->where('management_id', $request->integer('management_id'));
+        }
+
+        if ($request->filled('sector_id')) {
+            $query->where('sector_id', $request->integer('sector_id'));
+        }
+
+        /** @var LengthAwarePaginator $paginator */
+        $paginator = $query->paginate($request->integer('per_page', 15));
+        $paginator->getCollection()->transform(fn (Worker $worker) => $this->registeredWorkerPayload($worker));
+
+        return response()->json($paginator);
     }
 
     public function importTemplate()
@@ -202,5 +263,45 @@ class WorkerController extends Controller
             'sector_id' => ['nullable', 'exists:sectors,id'],
             'is_active' => ['boolean'],
         ]);
+    }
+
+    private function registeredWorkerPayload(Worker $worker): array
+    {
+        $payload = is_array($worker->external_payload) ? $worker->external_payload : [];
+        $area = $payload['area_desc'] ?? $worker->management?->name;
+        $fundo = $payload['fundo'] ?? $payload['sede'] ?? $worker->sector?->name;
+
+        return [
+            'id' => $worker->id,
+            'dni' => $worker->dni,
+            'first_name' => $worker->first_name,
+            'last_name' => $worker->last_name,
+            'email' => $worker->email,
+            'phone' => $worker->phone,
+            'position' => $worker->position,
+            'area' => $area,
+            'fundo' => $fundo,
+            'management' => $worker->management,
+            'sector' => $worker->sector,
+            'is_active' => $worker->is_active,
+            'hire_date' => optional($worker->hire_date)->toDateString(),
+            'termination_date' => optional($worker->termination_date)->toDateString(),
+            'source' => $worker->source,
+            'documents_count' => (int) $worker->documents_count,
+            'documents' => $worker->medicalDocuments->map(fn ($document) => [
+                'id' => $document->id,
+                'status' => $document->status,
+                'created_at' => $document->created_at,
+                'type' => $document->type,
+                'delivery_relation' => $document->deliveryRelation,
+                'delivery_relation_detail' => $document->delivery_relation_detail,
+                'deliverer_name' => $document->deliverer_name,
+                'deliverer_document' => $document->deliverer_document,
+                'contact_number' => $document->contact_number,
+                'observation' => $document->observation,
+                'creator' => $document->creator,
+                'files' => $document->files,
+            ])->values(),
+        ];
     }
 }

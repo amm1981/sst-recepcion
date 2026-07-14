@@ -33,8 +33,17 @@ interface DocsSaludApi {
     @GET("medical-documents")
     suspend fun getDocuments(
         @Query("status") status: String? = null,
+        @Query("date_from") dateFrom: String? = null,
+        @Query("date_to") dateTo: String? = null,
+        @Query("created_by") createdBy: Int? = null,
         @Query("per_page") perPage: Int = 100
     ): Response<PaginatedResponse<MedicalDocumentDto>>
+
+    @GET("reports/registrars")
+    suspend fun getRegistrars(
+        @Query("date_from") dateFrom: String? = null,
+        @Query("date_to") dateTo: String? = null
+    ): Response<List<RegistrarDto>>
 
     @GET("medical-documents/counts")
     suspend fun getCounts(): Response<DocumentCountsDto>
@@ -63,7 +72,28 @@ interface DocsSaludApi {
 data class LoginRequest(val user: String, val password: String)
 data class LoginResponse(val token: String, val user: UserDto)
 data class MeResponse(val user: UserDto)
-data class UserDto(val id: Int, val user: String? = null, val name: String, val email: String)
+data class UserDto(
+    val id: Int,
+    val user: String? = null,
+    val name: String,
+    val email: String,
+    val role: RoleDto? = null,
+    val permissions: List<String>? = emptyList()
+)
+
+data class RoleDto(
+    val id: Int,
+    val name: String,
+    val code: String
+)
+
+data class RegistrarDto(
+    val id: Int,
+    val user: String? = null,
+    val name: String,
+    val email: String,
+    @SerializedName("documents_count") val documentsCount: Int = 0
+)
 
 data class WorkerDto(
     val id: Int,

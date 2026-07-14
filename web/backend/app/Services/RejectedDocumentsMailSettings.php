@@ -42,7 +42,7 @@ class RejectedDocumentsMailSettings
 
     public function rejectedToday(): Collection
     {
-        return MedicalDocument::with(['type', 'worker', 'creator', 'statusChangedBy'])
+        return MedicalDocument::with(['type', 'worker', 'creator', 'statusChangedBy', 'history'])
             ->where('status', MedicalDocument::STATUS_REJECTED)
             ->whereDate('status_changed_at', today())
             ->latest('status_changed_at')
@@ -63,6 +63,7 @@ class RejectedDocumentsMailSettings
                 'creator' => (object) ['name' => 'Usuario RRHH'],
                 'statusChangedBy' => (object) ['name' => 'Usuario SST'],
                 'status_changed_at' => now(),
+                'history' => collect([(object) ['to_status' => MedicalDocument::STATUS_REJECTED, 'observation' => 'Documento ilegible.']]),
             ],
             (object) [
                 'id' => 1002,
@@ -75,6 +76,7 @@ class RejectedDocumentsMailSettings
                 'creator' => (object) ['name' => 'Usuario RRHH'],
                 'statusChangedBy' => (object) ['name' => 'Usuario SST'],
                 'status_changed_at' => now(),
+                'history' => collect([(object) ['to_status' => MedicalDocument::STATUS_REJECTED, 'observation' => 'Falta firma del trabajador.']]),
             ],
         ]);
     }
