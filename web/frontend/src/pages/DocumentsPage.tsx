@@ -176,22 +176,24 @@ export function DocumentsPage() {
         </div>
 
         <div style={{ padding: '0 24px 24px' }}>
-          <div className="toolbar">
-            <div className="filters">
-              <div>
+          <div className="toolbar documents-filter-toolbar">
+            <div className="filters document-filters">
+              <div className="field document-filter-search">
+                <label>Buscar</label>
                 <SearchBar 
                   placeholder="Buscar por N°, tipo, DNI o nombre..."
                   value={q}
                   onChange={(val) => { setQ(val); setPage(1) }}
                 />
               </div>
-              <div className="field" style={{ width: 'auto' }}>
-                <div style={{ position: 'relative' }}>
+              <div className="field document-filter-range">
+                <label>Rango</label>
+                <div className="select-with-leading-icon">
                   <Calendar size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
                   <select
                     value={dateRange}
                     onChange={(e) => { setDateRange(Number(e.target.value)); setPage(1) }}
-                    style={{ paddingLeft: 38, appearance: 'none', paddingRight: 32, fontWeight: 600, color: '#4b5563', border: '1px solid #d1d5db' }}
+                    className="document-range-select"
                   >
                     {DATE_RANGES.map((range) => (
                       <option key={range.days} value={range.days}>{range.label}</option>
@@ -199,12 +201,12 @@ export function DocumentsPage() {
                   </select>
                 </div>
               </div>
-              <div className="field" style={{ width: 'auto', minWidth: 170 }}>
+              <div className="field document-filter-date-to">
                 <label>Fecha hasta</label>
                 <input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1) }} />
               </div>
               {can('reports.view') ? (
-                <div className="field" style={{ width: 'auto', minWidth: 220 }}>
+                <div className="field document-filter-registrar">
                   <label>Usuario registrador</label>
                   <FilterSelect
                     value={createdBy}

@@ -12,6 +12,12 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::get('/medical-documents/files/{file}/preview', [MedicalDocumentController::class, 'previewFile']);
+Route::get('/medical-documents/files/{file}/download-signed', [MedicalDocumentController::class, 'signedDownloadFile'])
+    ->middleware('signed')
+    ->name('medical-documents.files.download-signed');
+Route::get('/medical-documents/files/{file}/preview-signed', [MedicalDocumentController::class, 'signedPreviewFile'])
+    ->middleware('signed')
+    ->name('medical-documents.files.preview-signed');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);

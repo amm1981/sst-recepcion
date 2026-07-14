@@ -257,6 +257,16 @@ class MedicalDocumentController extends Controller
     {
         $this->authorizeDocumentView($request, $file->medicalDocument);
 
+        return $this->downloadFileResponse($file);
+    }
+
+    public function signedDownloadFile(Request $request, MedicalDocumentFile $file)
+    {
+        return $this->downloadFileResponse($file);
+    }
+
+    private function downloadFileResponse(MedicalDocumentFile $file)
+    {
         [$disk, $path] = $this->documentDiskAndPath($file->path);
         abort_unless($disk->exists($path), 404);
 
@@ -277,6 +287,16 @@ class MedicalDocumentController extends Controller
         abort_unless($request->user(), 401);
         $this->authorizeDocumentView($request, $file->medicalDocument);
 
+        return $this->previewFileResponse($file);
+    }
+
+    public function signedPreviewFile(Request $request, MedicalDocumentFile $file)
+    {
+        return $this->previewFileResponse($file);
+    }
+
+    private function previewFileResponse(MedicalDocumentFile $file)
+    {
         [$disk, $path] = $this->documentDiskAndPath($file->path);
         abort_unless($disk->exists($path), 404);
 

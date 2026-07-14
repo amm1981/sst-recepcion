@@ -276,11 +276,20 @@ class ReportController extends Controller
             $rejectionReason = $document->history
                 ->firstWhere('to_status', MedicalDocument::STATUS_REJECTED)
                 ?->observation;
+            $linkExpiration = now()->addDays(30);
             $downloadLinks = $document->files
-                ->map(fn ($file) => URL::to("/api/medical-documents/files/{$file->id}/download"))
+                ->map(fn ($file) => URL::temporarySignedRoute(
+                    'medical-documents.files.download-signed',
+                    $linkExpiration,
+                    ['file' => $file->id],
+                ))
                 ->implode("\n");
             $previewLinks = $document->files
-                ->map(fn ($file) => URL::to("/api/medical-documents/files/{$file->id}/preview"))
+                ->map(fn ($file) => URL::temporarySignedRoute(
+                    'medical-documents.files.preview-signed',
+                    $linkExpiration,
+                    ['file' => $file->id],
+                ))
                 ->implode("\n");
 
             $values = [
