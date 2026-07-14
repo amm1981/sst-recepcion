@@ -116,7 +116,7 @@ h2 { font-size: 18px; font-weight: 700; }
 }
 .document-filters {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) 184px 170px minmax(220px, 240px);
+  grid-template-columns: minmax(240px, 1fr) 158px 158px 184px minmax(220px, 240px);
   align-items: end;
   gap: 12px;
   width: 100%;
@@ -126,6 +126,7 @@ h2 { font-size: 18px; font-weight: 700; }
 }
 .document-filter-search .search-input-container,
 .document-filter-search .search-input,
+.document-filter-date-from input,
 .document-filter-date-to input,
 .document-filter-registrar .filter-select,
 .document-range-select {

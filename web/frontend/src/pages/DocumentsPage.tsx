@@ -12,27 +12,38 @@ import { StatusBadge } from '../components/StatusBadge'
 import { FilterSelect } from '../components/FilterSelect'
 import type { MedicalDocument, Paginated, RegistrarSummary, Status } from '../types'
 
-const DATE_RANGES = [
-  { label: 'Últimos 7 días', days: 7 },
-  { label: 'Últimos 30 días', days: 30 },
-  { label: 'Últimos 90 días', days: 90 },
-  { label: 'Todo', days: 0 },
+const QUICK_DATE_RANGES = [
+  { label: 'Ultimos 7 dias', days: 7 },
+  { label: 'Ultimos 30 dias', days: 30 },
+  { label: 'Ultimos 45 dias', days: 45 },
 ]
+
+function formatDateInput(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function quickDateRange(days: number) {
+  const to = new Date()
+  const from = new Date()
+  from.setDate(to.getDate() - Math.max(days - 1, 0))
+  return { from: formatDateInput(from), to: formatDateInput(to) }
+}
 
 export function DocumentsPage() {
   const { can } = useAuth()
   const [status, setStatus] = useState<Status | 'TODOS'>('PENDIENTE')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
-  const [dateRange, setDateRange] = useState(30)
-  const [dateTo, setDateTo] = useState('')
+  const initialDateRange = useMemo(() => quickDateRange(30), [])
+  const [quickRangeDays, setQuickRangeDays] = useState<number | 'custom'>(30)
+  const [dateFrom, setDateFrom] = useState(initialDateRange.from)
+  const [dateTo, setDateTo] = useState(initialDateRange.to)
   const [createdBy, setCreatedBy] = useState('')
   const [selected, setSelected] = useState<MedicalDocument | null>(null)
   const perPage = 15
-
-  const dateFrom = dateRange > 0
-    ? new Date(Date.now() - dateRange * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    : undefined
 
   const registrars = useQuery({
     queryKey: ['document-registrars', dateFrom, dateTo],
@@ -149,6 +160,20 @@ export function DocumentsPage() {
     return pages
   }
 
+  function applyQuickRange(value: string) {
+    if (value === 'custom') {
+      setQuickRangeDays('custom')
+      return
+    }
+
+    const days = Number(value)
+    const range = quickDateRange(days)
+    setQuickRangeDays(days)
+    setDateFrom(range.from)
+    setDateTo(range.to)
+    setPage(1)
+  }
+
   return (
     <div>
       <div className="page-title" style={{ marginBottom: 24 }}>
@@ -186,24 +211,45 @@ export function DocumentsPage() {
                   onChange={(val) => { setQ(val); setPage(1) }}
                 />
               </div>
+              <div className="field document-filter-date-from">
+                <label>Fecha inicio</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(event) => {
+                    setDateFrom(event.target.value)
+                    setQuickRangeDays('custom')
+                    setPage(1)
+                  }}
+                />
+              </div>
+              <div className="field document-filter-date-to">
+                <label>Fecha fin</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(event) => {
+                    setDateTo(event.target.value)
+                    setQuickRangeDays('custom')
+                    setPage(1)
+                  }}
+                />
+              </div>
               <div className="field document-filter-range">
-                <label>Rango</label>
+                <label>Rango automatico</label>
                 <div className="select-with-leading-icon">
                   <Calendar size={18} color="#6b7280" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
                   <select
-                    value={dateRange}
-                    onChange={(e) => { setDateRange(Number(e.target.value)); setPage(1) }}
+                    value={quickRangeDays}
+                    onChange={(e) => applyQuickRange(e.target.value)}
                     className="document-range-select"
                   >
-                    {DATE_RANGES.map((range) => (
+                    <option value="custom">Personalizado</option>
+                    {QUICK_DATE_RANGES.map((range) => (
                       <option key={range.days} value={range.days}>{range.label}</option>
                     ))}
                   </select>
                 </div>
-              </div>
-              <div className="field document-filter-date-to">
-                <label>Fecha hasta</label>
-                <input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1) }} />
               </div>
               {can('reports.view') ? (
                 <div className="field document-filter-registrar">

@@ -13,6 +13,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import javax.inject.Inject
 
 data class DocumentListState(
@@ -26,6 +29,7 @@ data class DocumentListState(
     val canFilterByRegistrar: Boolean = false,
     val dateFrom: String = "",
     val dateTo: String = "",
+    val quickRangeDays: Int? = null,
     val createdBy: Int? = null,
     val error: String? = null,
     val message: String? = null
@@ -139,12 +143,26 @@ class DocumentListViewModel @Inject constructor(
     }
 
     fun updateDateFrom(value: String) {
-        _state.value = _state.value.copy(dateFrom = value)
+        _state.value = _state.value.copy(dateFrom = value, quickRangeDays = null)
         loadRegistrars()
     }
 
     fun updateDateTo(value: String) {
-        _state.value = _state.value.copy(dateTo = value)
+        _state.value = _state.value.copy(dateTo = value, quickRangeDays = null)
+        loadRegistrars()
+    }
+
+    fun applyQuickRange(days: Int) {
+        val output = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val to = Calendar.getInstance()
+        val from = Calendar.getInstance().apply {
+            add(Calendar.DAY_OF_YEAR, -((days - 1).coerceAtLeast(0)))
+        }
+        _state.value = _state.value.copy(
+            dateFrom = output.format(from.time),
+            dateTo = output.format(to.time),
+            quickRangeDays = days
+        )
         loadRegistrars()
     }
 
@@ -153,7 +171,7 @@ class DocumentListViewModel @Inject constructor(
     }
 
     fun clearFilters() {
-        _state.value = _state.value.copy(dateFrom = "", dateTo = "", createdBy = null)
+        _state.value = _state.value.copy(dateFrom = "", dateTo = "", quickRangeDays = null, createdBy = null)
         loadRegistrars()
     }
 

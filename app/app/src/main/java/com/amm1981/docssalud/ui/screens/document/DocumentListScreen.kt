@@ -1,5 +1,6 @@
 package com.amm1981.docssalud.ui.screens.document
 
+import android.app.DatePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,6 +33,9 @@ import com.amm1981.docssalud.ui.theme.ReceivedBackground
 import com.amm1981.docssalud.ui.theme.ReceivedBlue
 import com.amm1981.docssalud.ui.theme.RegisteredBackground
 import com.amm1981.docssalud.ui.theme.RegisteredGreen
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 private data class DocumentTab(val title: String, val status: String)
 
@@ -125,10 +130,12 @@ fun DocumentListScreen(
                 DocumentFilters(
                     dateFrom = state.dateFrom,
                     dateTo = state.dateTo,
+                    quickRangeDays = state.quickRangeDays,
                     selectedRegistrarId = state.createdBy,
                     registrars = state.registrars,
                     onDateFromChange = viewModel::updateDateFrom,
                     onDateToChange = viewModel::updateDateTo,
+                    onQuickRange = viewModel::applyQuickRange,
                     onRegistrarChange = viewModel::updateCreatedBy,
                     onApply = { viewModel.loadDocuments(tabs[selectedTabIndex].status) },
                     onClear = {
@@ -168,10 +175,12 @@ fun DocumentListScreen(
 private fun DocumentFilters(
     dateFrom: String,
     dateTo: String,
+    quickRangeDays: Int?,
     selectedRegistrarId: Int?,
     registrars: List<com.amm1981.docssalud.data.repository.RegistrarUi>,
     onDateFromChange: (String) -> Unit,
     onDateToChange: (String) -> Unit,
+    onQuickRange: (Int) -> Unit,
     onRegistrarChange: (Int?) -> Unit,
     onApply: () -> Unit,
     onClear: () -> Unit
@@ -191,22 +200,46 @@ private fun DocumentFilters(
             Text("Filtros", fontWeight = FontWeight.Bold, color = PrimaryGreen)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-            OutlinedTextField(
+            DateSelectorButton(
+                label = "Inicio",
                 value = dateFrom,
-                onValueChange = onDateFromChange,
-                label = { Text("Desde") },
-                placeholder = { Text("YYYY-MM-DD") },
-                singleLine = true,
+                onDateSelected = onDateFromChange,
                 modifier = Modifier.weight(1f)
             )
-            OutlinedTextField(
+            DateSelectorButton(
+                label = "Fin",
                 value = dateTo,
-                onValueChange = onDateToChange,
-                label = { Text("Hasta") },
-                placeholder = { Text("YYYY-MM-DD") },
-                singleLine = true,
+                onDateSelected = onDateToChange,
                 modifier = Modifier.weight(1f)
             )
+        }
+        Text("Rango automatico", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            listOf(7, 30, 45).forEach { days ->
+                val selected = quickRangeDays == days
+                val colors = if (selected) {
+                    ButtonDefaults.buttonColors(containerColor = PrimaryGreen)
+                } else {
+                    ButtonDefaults.outlinedButtonColors(contentColor = PrimaryGreen)
+                }
+                if (selected) {
+                    Button(
+                        onClick = { onQuickRange(days) },
+                        colors = colors,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("$days dias", fontSize = 12.sp)
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = { onQuickRange(days) },
+                        colors = colors,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("$days dias", fontSize = 12.sp)
+                    }
+                }
+            }
         }
         ExposedDropdownMenuBox(
             expanded = expanded,
@@ -248,6 +281,47 @@ private fun DocumentFilters(
             Button(onClick = onApply, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen)) {
                 Text("Aplicar")
             }
+        }
+    }
+}
+
+@Composable
+private fun DateSelectorButton(
+    label: String,
+    value: String,
+    onDateSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val formatter = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US) }
+    val calendar = remember(value) {
+        Calendar.getInstance().apply {
+            if (value.isNotBlank()) {
+                runCatching { formatter.parse(value) }.getOrNull()?.let { time = it }
+            }
+        }
+    }
+
+    Column(modifier = modifier) {
+        Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        OutlinedButton(
+            onClick = {
+                DatePickerDialog(
+                    context,
+                    { _, year, month, dayOfMonth ->
+                        val selected = Calendar.getInstance().apply {
+                            set(year, month, dayOfMonth)
+                        }
+                        onDateSelected(formatter.format(selected.time))
+                    },
+                    calendar.get(Calendar.YEAR),
+                    calendar.get(Calendar.MONTH),
+                    calendar.get(Calendar.DAY_OF_MONTH)
+                ).show()
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(value.ifBlank { "Seleccionar" }, maxLines = 1, fontSize = 13.sp)
         }
     }
 }
