@@ -12,6 +12,7 @@ use App\Models\Worker;
 use App\Services\RejectedDocumentsMailSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Http\UploadedFile;
@@ -253,11 +254,17 @@ class MedicalDocumentController extends Controller
 
         DB::transaction(function () use ($request, $medicalDocument, $data) {
             $from = $medicalDocument->status;
-            $medicalDocument->update([
+            $documentUpdates = [
                 'status' => $data['status'],
                 'status_changed_by' => $request->user()->id,
                 'status_changed_at' => now(),
-            ]);
+            ];
+
+            if ($data['status'] === MedicalDocument::STATUS_REJECTED) {
+                $documentUpdates['observation'] = $data['observation'] ?? null;
+            }
+
+            $medicalDocument->update($documentUpdates);
 
             MedicalDocumentStatusHistory::create([
                 'medical_document_id' => $medicalDocument->id,
@@ -273,7 +280,7 @@ class MedicalDocumentController extends Controller
             ]);
         });
 
-        $this->resendRejectedReportIfNeeded($medicalDocument->fresh());
+        $this->sendRejectedReportIfNeeded($medicalDocument->fresh());
 
         return response()->json($medicalDocument->fresh(['type', 'worker', 'deliveryRelation', 'history.user']));
     }
@@ -518,6 +525,22 @@ class MedicalDocumentController extends Controller
         $user = $request->user();
         if (! $user->hasRole('ADMIN') && ! $user->hasRole('SST') && $document->created_by !== $user->id) {
             abort(403, 'No puede ver documentos creados por otros usuarios.');
+        }
+    }
+
+    private function sendRejectedReportIfNeeded(MedicalDocument $document): void
+    {
+        if ($document->status !== MedicalDocument::STATUS_REJECTED) {
+            return;
+        }
+
+        try {
+            app(RejectedDocumentsMailSettings::class)->sendRejectedReport();
+        } catch (\Throwable $exception) {
+            Log::error('No se pudo enviar el reporte de documentos rechazados.', [
+                'document_id' => $document->id,
+                'error' => $exception->getMessage(),
+            ]);
         }
     }
 

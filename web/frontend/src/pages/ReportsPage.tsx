@@ -149,7 +149,7 @@ export function ReportsPage() {
   const historyCurrentPage = historyMeta?.current_page ?? 1
 
   return (
-    <div>
+    <div className="reports-page">
       <div className="breadcrumb">
         <Link to="/dashboard">Inicio</Link> &gt; <span>Reportes</span>
       </div>
@@ -160,7 +160,7 @@ export function ReportsPage() {
 
       <div className="report-filters">
         <div className="report-filters-row">
-          <div className="field">
+          <div className="field report-filter-search">
             <label>Buscar</label>
             <SearchBar
               placeholder="DNI, nombre, Nro o tipo..."
@@ -168,15 +168,15 @@ export function ReportsPage() {
               onChange={value => updateFilter('q', value)}
             />
           </div>
-          <div className="field">
+          <div className="field report-filter-date">
             <label>Fecha Desde</label>
             <input type="date" value={filters.from} onChange={e => updateFilter('from', e.target.value)} />
           </div>
-          <div className="field">
+          <div className="field report-filter-date">
             <label>Fecha Hasta</label>
             <input type="date" value={filters.to} onChange={e => updateFilter('to', e.target.value)} />
           </div>
-          <div className="field">
+          <div className="field report-filter-type">
             <label>Tipo de Documento</label>
             <FilterSelect 
               value={filters.type_id}
@@ -185,7 +185,7 @@ export function ReportsPage() {
               placeholder="Todos los tipos"
             />
           </div>
-          <div className="field">
+          <div className="field report-filter-status">
             <label>Estado</label>
             <FilterSelect 
               value={filters.status}
@@ -199,7 +199,7 @@ export function ReportsPage() {
               placeholder="Todos los estados"
             />
           </div>
-          <div className="field">
+          <div className="field report-filter-registrar">
             <label>Usuario Registrador</label>
             <FilterSelect
               value={filters.created_by}
@@ -208,7 +208,7 @@ export function ReportsPage() {
               placeholder="Todos los usuarios"
             />
           </div>
-          <div className="field">
+          <div className="field report-filter-management">
             <label>Gerencia</label>
             <FilterSelect 
               value={filters.management_id}
@@ -217,7 +217,7 @@ export function ReportsPage() {
               placeholder="Todas las gerencias"
             />
           </div>
-          <div className="field">
+          <div className="field report-filter-sector">
             <label>Sector</label>
             <FilterSelect 
               value={filters.sector_id}
@@ -234,7 +234,7 @@ export function ReportsPage() {
       </div>
 
       <div className="grid reports-stats">
-        <div className="card stat-card" style={{ padding: '20px' }}>
+        <div className="card stat-card report-stat-card">
           <div className="stat-icon" style={{ background: '#ecfdf5', color: '#047857' }}><FileText size={28} /></div>
           <div className="stat-info">
             <span className="stat-title">Total Documentos</span>
@@ -242,7 +242,7 @@ export function ReportsPage() {
             <span className="stat-desc">Todos los documentos</span>
           </div>
         </div>
-        <div className="card stat-card" style={{ padding: '20px' }}>
+        <div className="card stat-card report-stat-card">
           <div className="stat-icon orange"><Clock size={28} /></div>
           <div className="stat-info">
             <span className="stat-title">Pendientes</span>
@@ -250,7 +250,7 @@ export function ReportsPage() {
             <span className="stat-desc">Por recepcionar</span>
           </div>
         </div>
-        <div className="card stat-card" style={{ padding: '20px' }}>
+        <div className="card stat-card report-stat-card">
           <div className="stat-icon blue"><Inbox size={28} /></div>
           <div className="stat-info">
             <span className="stat-title">Recepcionados</span>
@@ -258,7 +258,7 @@ export function ReportsPage() {
             <span className="stat-desc">En revisión</span>
           </div>
         </div>
-        <div className="card stat-card" style={{ padding: '20px' }}>
+        <div className="card stat-card report-stat-card">
           <div className="stat-icon green"><CheckCircle2 size={28} /></div>
           <div className="stat-info">
             <span className="stat-title">Registrados</span>
@@ -266,7 +266,7 @@ export function ReportsPage() {
             <span className="stat-desc">Completados</span>
           </div>
         </div>
-        <div className="card stat-card" style={{ padding: '20px' }}>
+        <div className="card stat-card report-stat-card">
           <div className="stat-icon red"><XCircle size={28} /></div>
           <div className="stat-info">
             <span className="stat-title">Rechazados</span>
@@ -276,7 +276,7 @@ export function ReportsPage() {
         </div>
       </div>
 
-      <div className="grid hero" style={{ marginTop: 24 }}>
+      <div className="report-charts-grid">
         <div className="report-panel">
           <h2>Documentos por Estado</h2>
           <div className="report-panel-content">
@@ -312,10 +312,10 @@ export function ReportsPage() {
         </div>
       </div>
 
-      <div className="grid hero" style={{ marginTop: 24 }}>
-        <div className="report-panel">
+      <div className="report-section-grid">
+        <div className="report-panel report-panel-wide">
           <h2>Resumen por Tipo</h2>
-          <div className="report-panel-content" style={{ justifyContent: 'flex-start', overflow: 'auto' }}>
+          <div className="report-panel-content report-table-wrap">
             <table className="report-table">
               <thead>
                 <tr>
@@ -354,10 +354,10 @@ export function ReportsPage() {
         </div>
       </div>
 
-      <div className="grid hero" style={{ marginTop: 24 }}>
-        <div className="report-panel">
+      <div className="report-section-grid">
+        <div className="report-panel report-panel-wide">
           <h2>Documentos por Usuario Registrador</h2>
-          <div className="report-panel-content" style={{ justifyContent: 'flex-start', overflow: 'auto' }}>
+          <div className="report-panel-content report-table-wrap">
             <table className="report-table">
               <thead>
                 <tr>
@@ -383,10 +383,10 @@ export function ReportsPage() {
         </div>
       </div>
 
-      <div className="grid hero" style={{ marginTop: 24 }}>
-        <div className="report-panel">
+      <div className="report-section-grid">
+        <div className="report-panel report-panel-wide">
           <h2>Historial de Documentos por Trabajador</h2>
-          <div className="report-panel-content" style={{ justifyContent: 'flex-start', overflow: 'auto' }}>
+          <div className="report-panel-content report-table-wrap">
             <table className="report-table">
               <thead>
                 <tr>

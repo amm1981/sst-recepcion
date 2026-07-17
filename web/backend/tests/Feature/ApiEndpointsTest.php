@@ -11,6 +11,7 @@ use App\Models\Notification;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\Sector;
+use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -205,6 +206,38 @@ class ApiEndpointsTest extends TestCase
         $this->getJson('/api/reports/registrars?from=2')
             ->assertStatus(422)
             ->assertJsonValidationErrors('from');
+    }
+
+    public function test_rejecting_registered_document_updates_observation_and_sends_report(): void
+    {
+        Mail::fake();
+        $user = $this->adminUser();
+        $document = MedicalDocument::create($this->documentFixtures($user) + [
+            'status' => MedicalDocument::STATUS_REGISTERED,
+        ]);
+        SystemSetting::create([
+            'key' => \App\Services\RejectedDocumentsMailSettings::RECIPIENTS_KEY,
+            'value' => ['sst@example.com'],
+        ]);
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/medical-documents/{$document->id}/status", [
+            'status' => MedicalDocument::STATUS_REJECTED,
+            'observation' => 'Documento ilegible.',
+        ])->assertOk()
+            ->assertJsonPath('status', MedicalDocument::STATUS_REJECTED);
+
+        $this->assertDatabaseHas('medical_documents', [
+            'id' => $document->id,
+            'status' => MedicalDocument::STATUS_REJECTED,
+            'observation' => 'Documento ilegible.',
+        ]);
+        $this->assertDatabaseHas('medical_document_status_history', [
+            'medical_document_id' => $document->id,
+            'to_status' => MedicalDocument::STATUS_REJECTED,
+            'observation' => 'Documento ilegible.',
+        ]);
+        Mail::assertSent(\App\Mail\RejectedDocumentsReport::class, fn ($mail) => $mail->hasTo('sst@example.com'));
     }
 
     public function test_report_pdf_export_returns_a_pdf_file(): void

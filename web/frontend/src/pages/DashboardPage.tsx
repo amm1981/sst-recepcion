@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { StatusBadge } from '../components/StatusBadge'
 import type { DocumentCounts, MedicalDocument, Paginated } from '../types'
-import { ClipboardList, FileText, CheckCircle2, XCircle, FilePlus2, MoreVertical } from 'lucide-react'
+import { ClipboardList, FileText, CheckCircle2, XCircle, FilePlus2, Eye } from 'lucide-react'
 import { useAuth } from '../auth/AuthContext'
 
 export function DashboardPage() {
@@ -117,7 +117,7 @@ export function DashboardPage() {
                   <td>{new Date(doc.created_at).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
                   <td><StatusBadge status={doc.status} /></td>
                   <td style={{ textAlign: 'right' }}>
-                    <Link to={`/documents/${doc.id}`} style={{ color: '#9ca3af', padding: 8 }}><MoreVertical size={20} /></Link>
+                    <Link to={`/documents/${doc.id}`} style={{ color: '#9ca3af', padding: 8 }} title="Ver detalle"><Eye size={20} /></Link>
                   </td>
                 </tr>
               ))}
