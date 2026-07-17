@@ -535,7 +535,7 @@ class MedicalDocumentController extends Controller
         }
 
         try {
-            app(RejectedDocumentsMailSettings::class)->sendRejectedReport();
+            app(RejectedDocumentsMailSettings::class)->sendRejectedUpdateIfDailyReportWasSent();
         } catch (\Throwable $exception) {
             Log::error('No se pudo enviar el reporte de documentos rechazados.', [
                 'document_id' => $document->id,

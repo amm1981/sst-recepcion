@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Models\Worker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -208,9 +209,10 @@ class ApiEndpointsTest extends TestCase
             ->assertJsonValidationErrors('from');
     }
 
-    public function test_rejecting_registered_document_updates_observation_and_sends_report(): void
+    public function test_rejecting_registered_document_updates_observation_and_sends_update_after_daily_report(): void
     {
         Mail::fake();
+        Carbon::setTestNow(today()->setTime(17, 0));
         $user = $this->adminUser();
         $document = MedicalDocument::create($this->documentFixtures($user) + [
             'status' => MedicalDocument::STATUS_REGISTERED,
@@ -218,6 +220,10 @@ class ApiEndpointsTest extends TestCase
         SystemSetting::create([
             'key' => \App\Services\RejectedDocumentsMailSettings::RECIPIENTS_KEY,
             'value' => ['sst@example.com'],
+        ]);
+        SystemSetting::create([
+            'key' => \App\Services\RejectedDocumentsMailSettings::LAST_SENT_KEY,
+            'value' => ['sent_at' => today()->setTime(16, 30)->toISOString()],
         ]);
         Sanctum::actingAs($user);
 
@@ -238,6 +244,37 @@ class ApiEndpointsTest extends TestCase
             'observation' => 'Documento ilegible.',
         ]);
         Mail::assertSent(\App\Mail\RejectedDocumentsReport::class, fn ($mail) => $mail->hasTo('sst@example.com'));
+
+        Carbon::setTestNow();
+    }
+
+    public function test_rejecting_registered_document_waits_for_daily_report_when_it_has_not_been_sent(): void
+    {
+        Mail::fake();
+        Carbon::setTestNow(today()->setTime(15, 0));
+        $user = $this->adminUser();
+        $document = MedicalDocument::create($this->documentFixtures($user) + [
+            'status' => MedicalDocument::STATUS_REGISTERED,
+        ]);
+        SystemSetting::create([
+            'key' => \App\Services\RejectedDocumentsMailSettings::RECIPIENTS_KEY,
+            'value' => ['sst@example.com'],
+        ]);
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/medical-documents/{$document->id}/status", [
+            'status' => MedicalDocument::STATUS_REJECTED,
+            'observation' => 'Falta firma.',
+        ])->assertOk();
+
+        $this->assertDatabaseHas('medical_documents', [
+            'id' => $document->id,
+            'status' => MedicalDocument::STATUS_REJECTED,
+            'observation' => 'Falta firma.',
+        ]);
+        Mail::assertNothingSent();
+
+        Carbon::setTestNow();
     }
 
     public function test_report_pdf_export_returns_a_pdf_file(): void

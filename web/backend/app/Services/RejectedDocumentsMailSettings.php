@@ -99,6 +99,19 @@ class RejectedDocumentsMailSettings
         return $this->sendRejectedReport();
     }
 
+    public function sendRejectedUpdateIfDailyReportWasSent(): int
+    {
+        if (! $this->reportSentToday()) {
+            return 0;
+        }
+
+        if (now()->lt(today()->setTime(16, 30))) {
+            return 0;
+        }
+
+        return $this->sendRejectedReport();
+    }
+
     public function sampleDocuments(): Collection
     {
         return collect([
