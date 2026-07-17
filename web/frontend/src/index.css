@@ -513,6 +513,105 @@ tbody tr:hover { background: #f9fafb; }
 .report-panel h2 { font-size: 16px; font-weight: 700; color: #111827; margin: 0; }
 .report-panel-content { flex: 1; min-height: 300px; display: flex; flex-direction: column; justify-content: flex-end; }
 
+.report-ai-panel {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #d1fae5;
+  border-radius: 12px;
+}
+
+.report-ai-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.report-ai-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.report-ai-title svg {
+  color: #047857;
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.report-ai-title h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.report-ai-title p {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.report-ai-content {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.report-ai-summary {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.report-ai-summary p {
+  margin: 0;
+  color: #111827;
+  line-height: 1.5;
+}
+
+.report-ai-list {
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.report-ai-list h3 {
+  margin: 0 0 10px;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.report-ai-list ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.report-ai-list li {
+  color: #374151;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.error-alert {
+  padding: 12px 14px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #991b1b;
+  font-size: 13px;
+}
+
 /* Table overrides for report */
 .report-table { width: 100%; border-collapse: collapse; }
 .report-table th { padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #4b5563; font-weight: 600; font-size: 13px; text-align: left; }
@@ -567,6 +666,23 @@ tbody tr:hover { background: #f9fafb; }
 
   .reports-page .report-filters-actions .btn {
     width: 100%;
+  }
+
+  .report-ai-header,
+  .report-ai-title {
+    align-items: stretch;
+  }
+
+  .report-ai-header {
+    display: grid;
+  }
+
+  .report-ai-header .btn {
+    width: 100%;
+  }
+
+  .report-ai-content {
+    grid-template-columns: 1fr;
   }
 
   .report-stat-card {

@@ -18,6 +18,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
@@ -207,6 +208,54 @@ class ApiEndpointsTest extends TestCase
         $this->getJson('/api/reports/registrars?from=2')
             ->assertStatus(422)
             ->assertJsonValidationErrors('from');
+    }
+
+    public function test_report_ai_analysis_uses_aggregated_payload_without_worker_sensitive_data(): void
+    {
+        config([
+            'services.deepseek.api_key' => 'test-key',
+            'services.deepseek.model' => 'deepseek-v4-flash',
+        ]);
+
+        Http::fake(function ($request) {
+            $body = $request->data();
+            $content = $body['messages'][1]['content'] ?? '';
+
+            $this->assertSame('deepseek-v4-flash', $body['model']);
+            $this->assertStringContainsString('"worker_dni_included":false', $content);
+            $this->assertStringContainsString('"has_search":true', $content);
+            $this->assertStringNotContainsString('Carlos', $content);
+            $this->assertStringNotContainsString('Ramirez', $content);
+
+            return Http::response([
+                'choices' => [[
+                    'message' => [
+                        'content' => json_encode([
+                            'resumen_ejecutivo' => 'El reporte muestra carga documentaria controlada.',
+                            'hallazgos' => ['Predominan documentos registrados.'],
+                            'recomendaciones' => ['Revisar rechazos recurrentes.'],
+                            'riesgos' => ['No se identifican riesgos criticos con la muestra.'],
+                            'notas' => ['Analisis generado con datos agregados.'],
+                        ]),
+                    ],
+                ]],
+            ], 200);
+        });
+
+        $user = $this->adminUser();
+        $fixtures = $this->documentFixtures($user);
+        MedicalDocument::create($fixtures + ['status' => MedicalDocument::STATUS_REGISTERED]);
+        $worker = Worker::findOrFail($fixtures['worker_id']);
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/reports/ai-analysis?q=' . $worker->dni)
+            ->assertOk()
+            ->assertJsonPath('source', 'deepseek')
+            ->assertJsonPath('model', 'deepseek-v4-flash')
+            ->assertJsonPath('resumen_ejecutivo', 'El reporte muestra carga documentaria controlada.')
+            ->assertJsonPath('hallazgos.0', 'Predominan documentos registrados.');
+
+        Http::assertSentCount(1);
     }
 
     public function test_rejecting_registered_document_updates_observation_and_sends_update_after_daily_report_window(): void

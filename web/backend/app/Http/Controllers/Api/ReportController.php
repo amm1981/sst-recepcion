@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\MedicalDocument;
 use App\Models\User;
 use App\Models\Worker;
+use App\Services\DeepSeekReportAnalysisService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 
@@ -185,6 +187,33 @@ class ReportController extends Controller
         $paginator->getCollection()->transform(fn (Worker $worker) => $this->workerHistoryPayload($worker));
 
         return response()->json($paginator);
+    }
+
+    public function aiAnalysis(Request $request, DeepSeekReportAnalysisService $deepSeek)
+    {
+        if (! $deepSeek->configured()) {
+            return response()->json([
+                'message' => 'DeepSeek no esta configurado. Configure DEEPSEEK_API_KEY en el backend.',
+            ], 503);
+        }
+
+        $base = MedicalDocument::query();
+        $this->applyFilters($base, $request);
+
+        try {
+            return response()->json($deepSeek->analyze($this->aiReportPayload($base, $request)) + [
+                'generated_at' => now()->toISOString(),
+            ]);
+        } catch (\Throwable $exception) {
+            Log::error('No se pudo generar el analisis IA del reporte.', [
+                'error' => $exception->getMessage(),
+                'user_id' => $request->user()?->id,
+            ]);
+
+            return response()->json([
+                'message' => 'No se pudo generar el analisis IA del reporte.',
+            ], 502);
+        }
     }
 
     public function exportExcel(Request $request)
@@ -449,6 +478,76 @@ class ReportController extends Controller
             'registered' => (clone $base)->where('medical_documents.status', 'REGISTRADO')->count(),
             'rejected' => (clone $base)->where('medical_documents.status', 'RECHAZADO')->count(),
             'by_type' => $byType,
+        ];
+    }
+
+    private function aiReportPayload($base, Request $request): array
+    {
+        $summary = $this->summaryData($base);
+        $monthExpression = DB::getDriverName() === 'mysql'
+            ? "DATE_FORMAT(medical_documents.created_at, '%Y-%m')"
+            : "strftime('%Y-%m', medical_documents.created_at)";
+
+        $monthly = (clone $base)
+            ->select(DB::raw("{$monthExpression} as month"), DB::raw('count(*) as total'))
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get()
+            ->map(fn ($item) => [
+                'month' => $item->month,
+                'total' => (int) $item->total,
+            ])
+            ->values();
+
+        $registrars = (clone $base)
+            ->join('users', 'users.id', '=', 'medical_documents.created_by')
+            ->select('users.id', DB::raw('count(*) as total'))
+            ->groupBy('users.id')
+            ->orderByDesc('total')
+            ->limit(10)
+            ->get()
+            ->values()
+            ->map(fn ($item, int $index) => [
+                'label' => 'Registrador ' . ($index + 1),
+                'total' => (int) $item->total,
+            ]);
+
+        return [
+            'generated_at' => now('America/Lima')->toDateTimeString(),
+            'filters' => [
+                'from' => $request->input('from') ?: $request->input('date_from'),
+                'to' => $request->input('to') ?: $request->input('date_to'),
+                'status' => $request->input('status') ?: 'TODOS',
+                'type_id' => $request->input('type_id'),
+                'management_id' => $request->input('management_id'),
+                'sector_id' => $request->input('sector_id'),
+                'created_by' => $request->filled('created_by') ? 'FILTRADO' : null,
+                'has_search' => $request->filled('q'),
+            ],
+            'summary' => [
+                'total' => (int) $summary['total'],
+                'pending' => (int) $summary['pending'],
+                'received' => (int) $summary['received'],
+                'registered' => (int) $summary['registered'],
+                'rejected' => (int) $summary['rejected'],
+            ],
+            'by_type' => $summary['by_type']->map(fn ($item) => [
+                'name' => $item->name,
+                'total' => (int) $item->total,
+                'pending' => (int) $item->pendientes,
+                'received' => (int) $item->recepcionados,
+                'registered' => (int) $item->registrados,
+                'rejected' => (int) $item->rechazados,
+            ])->values(),
+            'monthly' => $monthly,
+            'registrars' => $registrars,
+            'privacy' => [
+                'worker_names_included' => false,
+                'worker_dni_included' => false,
+                'registrar_names_included' => false,
+                'document_files_included' => false,
+                'observations_included' => false,
+            ],
         ];
     }
 

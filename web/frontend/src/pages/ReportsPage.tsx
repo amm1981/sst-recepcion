@@ -1,8 +1,8 @@
-import { useQuery } from '@tanstack/react-query'
-import { api } from '../api/client'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { api, getErrorMessage } from '../api/client'
 import { Link } from 'react-router-dom'
 import { FilterSelect } from '../components/FilterSelect'
-import { FileText, Clock, Inbox, CheckCircle2, XCircle, FileSpreadsheet, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
+import { FileText, Clock, Inbox, CheckCircle2, XCircle, FileSpreadsheet, Eye, ChevronLeft, ChevronRight, BrainCircuit, Loader2 } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, LineChart, Line } from 'recharts'
 import { useMemo, useState } from 'react'
 import { Modal } from '../components/Modal'
@@ -16,6 +16,17 @@ type ReportSummary = {
   by_type: { name: string; total: number; pendientes: number; recepcionados: number; registrados: number; rechazados: number }[]
   monthly: { month: string; total: number }[]
   by_creator: { id: number; name: string; user?: string; email: string; total: number }[]
+}
+
+type AiReportAnalysis = {
+  resumen_ejecutivo: string
+  hallazgos: string[]
+  recomendaciones: string[]
+  riesgos: string[]
+  notas: string[]
+  model?: string
+  source?: string
+  generated_at?: string
 }
 
 type Catalogs = {
@@ -72,6 +83,13 @@ export function ReportsPage() {
       params.set('page', String(historyPage))
       params.set('per_page', String(historyPerPage))
       return (await api.get<Paginated<RegisteredWorker>>(`/reports/workers-history?${params.toString()}`)).data
+    },
+  })
+
+  const aiAnalysis = useMutation({
+    mutationFn: async () => {
+      const params = buildReportParams(filters)
+      return (await api.post<AiReportAnalysis>(`/reports/ai-analysis?${params.toString()}`)).data
     },
   })
 
@@ -276,6 +294,40 @@ export function ReportsPage() {
         </div>
       </div>
 
+      <div className="report-ai-panel">
+        <div className="report-ai-header">
+          <div className="report-ai-title">
+            <BrainCircuit size={22} />
+            <div>
+              <h2>Analisis ejecutivo con IA</h2>
+              <p>DeepSeek interpreta los totales consolidados del backend, sin datos sensibles de trabajadores.</p>
+            </div>
+          </div>
+          <button className="btn" type="button" disabled={aiAnalysis.isPending} onClick={() => aiAnalysis.mutate()}>
+            {aiAnalysis.isPending ? <Loader2 size={18} className="spin" /> : <BrainCircuit size={18} />}
+            {aiAnalysis.isPending ? 'Generando...' : 'Generar analisis'}
+          </button>
+        </div>
+
+        {aiAnalysis.isError ? (
+          <div className="alert error-alert">{getErrorMessage(aiAnalysis.error)}</div>
+        ) : null}
+
+        {aiAnalysis.data ? (
+          <div className="report-ai-content">
+            <div className="report-ai-summary">
+              <span className="muted-text">Resumen ejecutivo</span>
+              <p>{aiAnalysis.data.resumen_ejecutivo || 'Sin resumen disponible.'}</p>
+            </div>
+            <AiList title="Hallazgos" items={aiAnalysis.data.hallazgos} />
+            <AiList title="Recomendaciones" items={aiAnalysis.data.recomendaciones} />
+            <AiList title="Riesgos" items={aiAnalysis.data.riesgos} />
+            {aiAnalysis.data.notas?.length ? <AiList title="Notas" items={aiAnalysis.data.notas} /> : null}
+            <div className="muted-text">Modelo: {aiAnalysis.data.model ?? 'DeepSeek'}</div>
+          </div>
+        ) : null}
+      </div>
+
       <div className="report-charts-grid">
         <div className="report-panel">
           <h2>Documentos por Estado</h2>
@@ -444,6 +496,21 @@ export function ReportsPage() {
       </div>
 
       {selectedWorker ? <WorkerHistoryModal worker={selectedWorker} onClose={() => setSelectedWorker(null)} /> : null}
+    </div>
+  )
+}
+
+function AiList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="report-ai-list">
+      <h3>{title}</h3>
+      {items.length ? (
+        <ul>
+          {items.map((item, index) => <li key={`${title}-${index}`}>{item}</li>)}
+        </ul>
+      ) : (
+        <p className="muted-text">Sin elementos.</p>
+      )}
     </div>
   )
 }
