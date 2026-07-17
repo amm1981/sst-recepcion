@@ -209,10 +209,10 @@ class ApiEndpointsTest extends TestCase
             ->assertJsonValidationErrors('from');
     }
 
-    public function test_rejecting_registered_document_updates_observation_and_sends_update_after_daily_report(): void
+    public function test_rejecting_registered_document_updates_observation_and_sends_update_after_daily_report_window(): void
     {
         Mail::fake();
-        Carbon::setTestNow(today()->setTime(17, 0));
+        Carbon::setTestNow(Carbon::parse('2026-07-16 23:53:55', 'America/Lima'));
         $user = $this->adminUser();
         $document = MedicalDocument::create($this->documentFixtures($user) + [
             'status' => MedicalDocument::STATUS_REGISTERED,
@@ -220,10 +220,6 @@ class ApiEndpointsTest extends TestCase
         SystemSetting::create([
             'key' => \App\Services\RejectedDocumentsMailSettings::RECIPIENTS_KEY,
             'value' => ['sst@example.com'],
-        ]);
-        SystemSetting::create([
-            'key' => \App\Services\RejectedDocumentsMailSettings::LAST_SENT_KEY,
-            'value' => ['sent_at' => today()->setTime(16, 30)->toISOString()],
         ]);
         Sanctum::actingAs($user);
 
@@ -251,7 +247,7 @@ class ApiEndpointsTest extends TestCase
     public function test_rejecting_registered_document_waits_for_daily_report_when_it_has_not_been_sent(): void
     {
         Mail::fake();
-        Carbon::setTestNow(today()->setTime(15, 0));
+        Carbon::setTestNow(Carbon::parse('2026-07-16 15:00:00', 'America/Lima'));
         $user = $this->adminUser();
         $document = MedicalDocument::create($this->documentFixtures($user) + [
             'status' => MedicalDocument::STATUS_REGISTERED,

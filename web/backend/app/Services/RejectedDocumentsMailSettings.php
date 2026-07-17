@@ -7,12 +7,14 @@ use App\Models\MedicalDocument;
 use App\Models\SystemSetting;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class RejectedDocumentsMailSettings
 {
     public const RECIPIENTS_KEY = 'rejected_documents_report_recipients';
     public const LAST_SENT_KEY = 'rejected_documents_report_last_sent_at';
+    private const REPORT_TIMEZONE = 'America/Lima';
 
     public function recipients(): array
     {
@@ -46,9 +48,11 @@ class RejectedDocumentsMailSettings
 
     public function rejectedToday(): Collection
     {
+        [$startsAt, $endsAt] = $this->reportDayBounds();
+
         return MedicalDocument::with(['type', 'worker', 'creator', 'statusChangedBy', 'history'])
             ->where('status', MedicalDocument::STATUS_REJECTED)
-            ->whereDate('status_changed_at', today())
+            ->whereBetween('status_changed_at', [$startsAt, $endsAt])
             ->latest('status_changed_at')
             ->get();
     }
@@ -58,7 +62,9 @@ class RejectedDocumentsMailSettings
         $setting = SystemSetting::where('key', self::LAST_SENT_KEY)->first();
         $value = is_array($setting?->value) ? ($setting->value['sent_at'] ?? null) : null;
 
-        return $value ? Carbon::parse($value)->isToday() : false;
+        return $value
+            ? Carbon::parse($value)->setTimezone(self::REPORT_TIMEZONE)->isSameDay($this->reportNow())
+            : false;
     }
 
     public function markReportSent(): void
@@ -73,11 +79,19 @@ class RejectedDocumentsMailSettings
     {
         $recipients = $this->recipients();
         if ($recipients === []) {
+            Log::info('Reporte de documentos rechazados omitido: no hay destinatarios configurados.', [
+                'is_test' => $isTest,
+            ]);
+
             return 0;
         }
 
         $documents = $this->rejectedToday();
         if ($documents->isEmpty()) {
+            Log::info('Reporte de documentos rechazados omitido: no hay documentos rechazados del dia.', [
+                'is_test' => $isTest,
+            ]);
+
             return 0;
         }
 
@@ -86,6 +100,13 @@ class RejectedDocumentsMailSettings
         if (! $isTest) {
             $this->markReportSent();
         }
+
+        Log::info('Reporte de documentos rechazados enviado.', [
+            'is_test' => $isTest,
+            'documents_count' => $documents->count(),
+            'recipients_count' => count($recipients),
+            'report_timezone' => self::REPORT_TIMEZONE,
+        ]);
 
         return $documents->count();
     }
@@ -101,15 +122,47 @@ class RejectedDocumentsMailSettings
 
     public function sendRejectedUpdateIfDailyReportWasSent(): int
     {
-        if (! $this->reportSentToday()) {
-            return 0;
-        }
+        return $this->sendRejectedUpdateAfterDailyReportWindow();
+    }
 
-        if (now()->lt(today()->setTime(16, 30))) {
+    public function sendRejectedUpdateAfterDailyReportWindow(): int
+    {
+        $now = $this->reportNow();
+        $windowStartsAt = $this->reportToday()->setTime(16, 30);
+
+        if ($now->lt($windowStartsAt)) {
+            Log::info('Actualizacion de documentos rechazados omitida: fuera de ventana posterior al reporte diario.', [
+                'window_starts_at' => $windowStartsAt->toDateTimeString(),
+                'current_time' => $now->toDateTimeString(),
+                'report_timezone' => self::REPORT_TIMEZONE,
+            ]);
+
             return 0;
         }
 
         return $this->sendRejectedReport();
+    }
+
+    private function reportNow(): Carbon
+    {
+        return now(self::REPORT_TIMEZONE);
+    }
+
+    private function reportToday(): Carbon
+    {
+        return Carbon::today(self::REPORT_TIMEZONE);
+    }
+
+    private function reportDayBounds(): array
+    {
+        $storageTimezone = config('app.timezone', 'UTC');
+        $startsAt = $this->reportToday()->startOfDay();
+        $endsAt = $this->reportToday()->endOfDay();
+
+        return [
+            $startsAt->copy()->setTimezone($storageTimezone),
+            $endsAt->copy()->setTimezone($storageTimezone),
+        ];
     }
 
     public function sampleDocuments(): Collection

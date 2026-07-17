@@ -10,4 +10,4 @@ Artisan::command('inspire', function () {
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('workers:sync-employee-flow')->hourly();
-Schedule::command('documents:send-rejected-report')->dailyAt('16:30');
+Schedule::command('documents:send-rejected-report')->dailyAt('16:30')->timezone('America/Lima');

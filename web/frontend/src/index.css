@@ -147,11 +147,11 @@ h2 { font-size: 18px; font-weight: 700; }
   color: #4b5563;
   font-weight: 600;
 }
-.search-input {
-  position: relative; flex: 1; max-width: 380px;
+.search-input-container {
+  position: relative;
+  flex: 1;
+  min-width: 0;
 }
-.search-input svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #9ca3af; }
-.search-input input { padding-left: 38px; width: 100%; }
 
 /* Buttons & Inputs */
 .btn, .icon-btn {
@@ -697,14 +697,18 @@ tbody tr:hover { background: #f9fafb; }
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
+  min-width: 0;
 }
 
 .search-icon {
   position: absolute;
   left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
   color: #6b7280;
   pointer-events: none;
-  z-index: 5;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -719,6 +723,12 @@ tbody tr:hover { background: #f9fafb; }
   transition: border-color 0.2s, box-shadow 0.2s;
   width: 100%;
   min-width: 250px;
+  box-sizing: border-box;
+}
+
+.search-input-container .search-input {
+  min-width: 0;
+  padding-left: 38px !important;
 }
 
 .search-input:focus {
