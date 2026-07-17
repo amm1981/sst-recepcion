@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\MedicalDocument;
 use App\Models\User;
 use App\Models\Worker;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Validation\ValidationException;
 
 class ReportController extends Controller
 {
@@ -19,12 +21,12 @@ class ReportController extends Controller
 
         if ($request->filled('date_from') || $request->filled('from')) {
             $fromField = $request->filled('date_from') ? 'date_from' : 'from';
-            $query->whereDate('medical_documents.created_at', '>=', $request->date($fromField));
+            $query->whereDate('medical_documents.created_at', '>=', $this->validatedDateFilter($request, $fromField));
         }
         
         if ($request->filled('date_to') || $request->filled('to')) {
             $toField = $request->filled('date_to') ? 'date_to' : 'to';
-            $query->whereDate('medical_documents.created_at', '<=', $request->date($toField));
+            $query->whereDate('medical_documents.created_at', '<=', $this->validatedDateFilter($request, $toField));
         }
 
         $query->when($request->filled('created_by'), function ($q) use ($request) {
@@ -64,6 +66,19 @@ class ReportController extends Controller
         });
         
         return $query;
+    }
+
+    private function validatedDateFilter(Request $request, string $field): string
+    {
+        $value = (string) $request->input($field);
+
+        if (! Carbon::hasFormat($value, 'Y-m-d') || ! Carbon::canBeCreatedFromFormat($value, 'Y-m-d')) {
+            throw ValidationException::withMessages([
+                $field => 'La fecha debe tener el formato YYYY-MM-DD.',
+            ]);
+        }
+
+        return $value;
     }
 
     private function applyDocumentVisibility($query, Request $request): void

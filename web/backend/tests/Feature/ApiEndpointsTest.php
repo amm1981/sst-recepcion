@@ -197,6 +197,16 @@ class ApiEndpointsTest extends TestCase
             ->assertJsonFragment(['to_status' => MedicalDocument::STATUS_REGISTERED]);
     }
 
+    public function test_report_filters_return_validation_error_for_invalid_dates(): void
+    {
+        $user = $this->adminUser();
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/reports/registrars?from=2')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('from');
+    }
+
     public function test_report_pdf_export_returns_a_pdf_file(): void
     {
         $user = $this->adminUser();
