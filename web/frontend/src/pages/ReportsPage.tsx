@@ -300,7 +300,7 @@ export function ReportsPage() {
             <div className="report-ai-icon"><BrainCircuit size={22} /></div>
             <div>
               <div className="report-ai-kicker">Beta</div>
-              <h2>Análisis ejecutivo</h2>
+              <h2>Análisis con IA</h2>
             </div>
           </div>
           <button className="btn" type="button" disabled={aiAnalysis.isPending} onClick={() => aiAnalysis.mutate()}>
