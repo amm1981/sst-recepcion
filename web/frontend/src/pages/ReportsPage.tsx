@@ -2,7 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { api, getErrorMessage } from '../api/client'
 import { Link } from 'react-router-dom'
 import { FilterSelect } from '../components/FilterSelect'
-import { FileText, Clock, Inbox, CheckCircle2, XCircle, FileSpreadsheet, Eye, ChevronLeft, ChevronRight, BrainCircuit, Loader2 } from 'lucide-react'
+import { FileText, Clock, Inbox, CheckCircle2, XCircle, FileSpreadsheet, Eye, ChevronLeft, ChevronRight, BrainCircuit, Loader2, ListChecks, Lightbulb, AlertTriangle, NotebookText } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, LineChart, Line } from 'recharts'
 import { useMemo, useState } from 'react'
 import { Modal } from '../components/Modal'
@@ -296,16 +296,16 @@ export function ReportsPage() {
 
       <div className="report-ai-panel">
         <div className="report-ai-header">
-          <div className="report-ai-title">
-            <BrainCircuit size={22} />
+          <div className="report-ai-heading">
+            <div className="report-ai-icon"><BrainCircuit size={22} /></div>
             <div>
-              <h2>Análisis con IA - beta</h2>
-              <p>DeepSeek interpreta los totales consolidados del backend, sin datos sensibles de trabajadores.</p>
+              <div className="report-ai-kicker">Beta</div>
+              <h2>Análisis ejecutivo</h2>
             </div>
           </div>
           <button className="btn" type="button" disabled={aiAnalysis.isPending} onClick={() => aiAnalysis.mutate()}>
             {aiAnalysis.isPending ? <Loader2 size={18} className="spin" /> : <BrainCircuit size={18} />}
-            {aiAnalysis.isPending ? 'Generando...' : 'Generar analisis'}
+            {aiAnalysis.isPending ? 'Generando...' : 'Generar análisis'}
           </button>
         </div>
 
@@ -316,14 +316,16 @@ export function ReportsPage() {
         {aiAnalysis.data ? (
           <div className="report-ai-content">
             <div className="report-ai-summary">
-              <span className="muted-text">Resumen ejecutivo</span>
+              <div className="report-ai-section-title">
+                <NotebookText size={18} />
+                <span>Resumen ejecutivo</span>
+              </div>
               <p>{aiAnalysis.data.resumen_ejecutivo || 'Sin resumen disponible.'}</p>
             </div>
-            <AiList title="Hallazgos" items={aiAnalysis.data.hallazgos} />
-            <AiList title="Recomendaciones" items={aiAnalysis.data.recomendaciones} />
-            <AiList title="Riesgos" items={aiAnalysis.data.riesgos} />
-            {aiAnalysis.data.notas?.length ? <AiList title="Notas" items={aiAnalysis.data.notas} /> : null}
-            <div className="muted-text">Modelo: {aiAnalysis.data.model ?? 'DeepSeek'}</div>
+            <AiList title="Hallazgos" items={aiAnalysis.data.hallazgos} tone="info" />
+            <AiList title="Recomendaciones" items={aiAnalysis.data.recomendaciones} tone="success" />
+            <AiList title="Riesgos" items={aiAnalysis.data.riesgos} tone="warning" />
+            {aiAnalysis.data.notas?.length ? <AiList title="Notas" items={aiAnalysis.data.notas} tone="neutral" /> : null}
           </div>
         ) : null}
       </div>
@@ -500,10 +502,13 @@ export function ReportsPage() {
   )
 }
 
-function AiList({ title, items }: { title: string; items: string[] }) {
+function AiList({ title, items, tone }: { title: string; items: string[]; tone: 'info' | 'success' | 'warning' | 'neutral' }) {
   return (
-    <div className="report-ai-list">
-      <h3>{title}</h3>
+    <div className={`report-ai-list ${tone}`}>
+      <div className="report-ai-section-title">
+        {tone === 'success' ? <Lightbulb size={18} /> : tone === 'warning' ? <AlertTriangle size={18} /> : <ListChecks size={18} />}
+        <h3>{title}</h3>
+      </div>
       {items.length ? (
         <ul>
           {items.map((item, index) => <li key={`${title}-${index}`}>{item}</li>)}
