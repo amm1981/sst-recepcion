@@ -33,6 +33,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/medical-documents/counts', [MedicalDocumentController::class, 'counts']);
     Route::get('/medical-documents/{medicalDocument}/history', [MedicalDocumentController::class, 'history']);
+    Route::patch('/medical-documents/{medicalDocument}/observation', [MedicalDocumentController::class, 'updateObservation']);
     Route::post('/medical-documents/{medicalDocument}/status', [MedicalDocumentController::class, 'changeStatus'])->middleware('permission:documents.updateStatus');
     Route::get('/medical-documents/files/{file}/download', [MedicalDocumentController::class, 'downloadFile']);
     Route::apiResource('medical-documents', MedicalDocumentController::class)

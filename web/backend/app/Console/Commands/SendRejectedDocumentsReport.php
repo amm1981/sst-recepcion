@@ -2,10 +2,8 @@
 
 namespace App\Console\Commands;
 
-use App\Mail\RejectedDocumentsReport;
 use App\Services\RejectedDocumentsMailSettings;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Mail;
 
 class SendRejectedDocumentsReport extends Command
 {
@@ -28,7 +26,7 @@ class SendRejectedDocumentsReport extends Command
             return self::SUCCESS;
         }
 
-        Mail::to($recipients)->send(new RejectedDocumentsReport($documents));
+        $settings->sendRejectedReport();
 
         $this->info("Reporte de {$documents->count()} documentos rechazados enviado a: " . implode(', ', $recipients));
 

@@ -43,6 +43,7 @@
                                         <th style="padding:11px 8px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">ID de documento</th>
                                         <th style="padding:11px 8px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">DNI de trabajador</th>
                                         <th style="padding:11px 8px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Nombre de trabajador</th>
+                                        <th style="padding:11px 8px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Usuario registrador</th>
                                         <th style="padding:11px 8px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Tipo de documento</th>
                                         <th style="padding:11px 8px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Estado</th>
                                         <th style="padding:11px 8px; text-align:left; border-bottom:2px solid #e5e7eb; color:#6b7280;">Motivo de rechazo</th>
@@ -57,6 +58,7 @@
                                             <td style="padding:12px 8px; border-bottom:1px solid #f3f4f6; color:#111827; font-weight:700;">#{{ $doc->id }}</td>
                                             <td style="padding:12px 8px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ $doc->worker?->dni ?? '-' }}</td>
                                             <td style="padding:12px 8px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ trim(($doc->worker?->first_name ?? '') . ' ' . ($doc->worker?->last_name ?? '')) ?: '-' }}</td>
+                                            <td style="padding:12px 8px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ $doc->creator?->name ?? '-' }}</td>
                                             <td style="padding:12px 8px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ $doc->type?->name ?? '-' }}</td>
                                             <td style="padding:12px 8px; border-bottom:1px solid #f3f4f6; color:#b91c1c; font-weight:700;">{{ $doc->status ?? 'RECHAZADO' }}</td>
                                             <td style="padding:12px 8px; border-bottom:1px solid #f3f4f6; color:#374151;">{{ $rejectionReason ?: '-' }}</td>

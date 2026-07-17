@@ -490,9 +490,9 @@ class DocumentRepository @Inject constructor(
         return try {
             FileOutputStream(targetFile).use { output ->
                 if (mimeType == "image/png" || targetFile.extension.equals("png", ignoreCase = true)) {
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 80, output)
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
                 } else {
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 78, output)
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 88, output)
                 }
             }
         } finally {

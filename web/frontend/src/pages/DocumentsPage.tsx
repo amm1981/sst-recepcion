@@ -33,7 +33,7 @@ function quickDateRange(days: number) {
 }
 
 export function DocumentsPage() {
-  const { can } = useAuth()
+  const { can, user } = useAuth()
   const [status, setStatus] = useState<Status | 'TODOS'>('PENDIENTE')
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
@@ -44,6 +44,7 @@ export function DocumentsPage() {
   const [createdBy, setCreatedBy] = useState('')
   const [selected, setSelected] = useState<MedicalDocument | null>(null)
   const perPage = 15
+  const isAdmin = user?.role?.code === 'ADMIN'
 
   const registrars = useQuery({
     queryKey: ['document-registrars', dateFrom, dateTo],
@@ -89,7 +90,7 @@ export function DocumentsPage() {
         header: 'Acciones',
         cell: ({ row }) => (
           <div className="header-actions" style={{ justifyContent: 'flex-end', gap: 4 }}>
-            {can('documents.updateStatus') && ['PENDIENTE', 'RECEPCIONADO'].includes(row.original.status) ? (
+            {can('documents.updateStatus') && (['PENDIENTE', 'RECEPCIONADO'].includes(row.original.status) || (isAdmin && row.original.status === 'REGISTRADO')) ? (
               <button className="icon-btn ghost" type="button" onClick={() => setSelected(row.original)} title="Cambiar estado" style={{ color: '#047857' }}>
                 <RefreshCw size={18} />
               </button>
@@ -101,7 +102,7 @@ export function DocumentsPage() {
         ),
       },
     ],
-    [can],
+    [can, isAdmin],
   )
 
   const meta = documents.data
@@ -319,6 +320,8 @@ function StatusModal({ document, onClose }: { document: MedicalDocument; onClose
       ? ['RECEPCIONADO', 'RECHAZADO']
       : document.status === 'RECEPCIONADO'
         ? ['REGISTRADO', 'RECHAZADO']
+        : document.status === 'REGISTRADO'
+          ? ['RECHAZADO']
         : []
 
   const mutation = useMutation({

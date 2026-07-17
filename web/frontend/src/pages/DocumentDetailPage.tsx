@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Eye, RefreshCw, X, FileText } from 'lucide-react'
+import { Download, Eye, RefreshCw, X, FileText, Pencil, Trash2 } from 'lucide-react'
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api, getErrorMessage } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { Modal } from '../components/Modal'
@@ -21,8 +21,11 @@ function getPreviewUrl(fileId: number): string {
 
 export function DocumentDetailPage() {
   const { id } = useParams()
-  const { can } = useAuth()
+  const { can, user } = useAuth()
+  const navigate = useNavigate()
   const [statusOpen, setStatusOpen] = useState(false)
+  const [observationOpen, setObservationOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [previewFile, setPreviewFile] = useState<MedicalDocumentFile | null>(null)
   const document = useQuery({
     queryKey: ['document', id],
@@ -34,6 +37,10 @@ export function DocumentDetailPage() {
   if (!document.data) return <div>No encontrado</div>
 
   const data = document.data
+  const isAdmin = user?.role?.code === 'ADMIN'
+  const canChangeStatus = can('documents.updateStatus') && (
+    ['PENDIENTE', 'RECEPCIONADO'].includes(data.status) || (isAdmin && data.status === 'REGISTRADO')
+  )
 
   async function downloadFile(fileId: number, fileName: string) {
     const response = await api.get(`/medical-documents/files/${fileId}/download`, { responseType: 'blob' })
@@ -58,10 +65,22 @@ export function DocumentDetailPage() {
         </div>
         <div className="header-actions">
           <StatusBadge status={data.status} />
-          {can('documents.updateStatus') && ['PENDIENTE', 'RECEPCIONADO'].includes(data.status) ? (
+          {isAdmin ? (
+            <button className="btn secondary" type="button" onClick={() => setObservationOpen(true)}>
+              <Pencil size={18} />
+              Editar observacion
+            </button>
+          ) : null}
+          {canChangeStatus ? (
             <button className="btn secondary" type="button" onClick={() => setStatusOpen(true)}>
               <RefreshCw size={18} />
               Cambiar estado
+            </button>
+          ) : null}
+          {isAdmin ? (
+            <button className="btn danger" type="button" onClick={() => setDeleteOpen(true)}>
+              <Trash2 size={18} />
+              Eliminar
             </button>
           ) : null}
         </div>
@@ -81,6 +100,10 @@ export function DocumentDetailPage() {
           <div><strong>{data.deliverer_name}</strong></div>
           <div className="muted">{data.deliveryRelation?.name ?? data.delivery_relation?.name}</div>
           <div className="muted">Contacto: {data.contact_number}</div>
+          <div>
+            <strong>Observacion</strong>
+            <div className="muted">{data.observation || 'Sin observacion registrada'}</div>
+          </div>
         </section>
       </div>
 
@@ -139,6 +162,8 @@ export function DocumentDetailPage() {
         />
       ) : null}
       {statusOpen ? <DetailStatusModal document={data} onClose={() => setStatusOpen(false)} /> : null}
+      {observationOpen ? <ObservationModal document={data} onClose={() => setObservationOpen(false)} /> : null}
+      {deleteOpen ? <DeleteDocumentModal document={data} onClose={() => setDeleteOpen(false)} onDeleted={() => navigate('/documents')} /> : null}
     </div>
   )
 }
@@ -319,6 +344,8 @@ function FilePreviewModal({
 
 function DetailStatusModal({ document, onClose }: { document: MedicalDocument; onClose: () => void }) {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const isAdmin = user?.role?.code === 'ADMIN'
   const [status, setStatus] = useState<Status | ''>('')
   const [observation, setObservation] = useState('')
   const [error, setError] = useState('')
@@ -327,6 +354,8 @@ function DetailStatusModal({ document, onClose }: { document: MedicalDocument; o
       ? ['RECEPCIONADO', 'RECHAZADO']
       : document.status === 'RECEPCIONADO'
         ? ['REGISTRADO', 'RECHAZADO']
+        : isAdmin && document.status === 'REGISTRADO'
+          ? ['RECHAZADO']
         : []
   const mutation = useMutation({
     mutationFn: async () => api.post(`/medical-documents/${document.id}/status`, { status, observation }),
@@ -360,6 +389,75 @@ function DetailStatusModal({ document, onClose }: { document: MedicalDocument; o
         <button className="btn" type="button" disabled={!status || mutation.isPending} onClick={() => mutation.mutate()}>
           Guardar
         </button>
+      </div>
+    </Modal>
+  )
+}
+
+function ObservationModal({ document, onClose }: { document: MedicalDocument; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const [observation, setObservation] = useState(document.observation ?? '')
+  const [error, setError] = useState('')
+
+  const mutation = useMutation({
+    mutationFn: async () => api.patch(`/medical-documents/${document.id}/observation`, { observation }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['document', String(document.id)] }),
+        queryClient.invalidateQueries({ queryKey: ['documents'] }),
+      ])
+      onClose()
+    },
+    onError: (mutationError) => setError(getErrorMessage(mutationError)),
+  })
+
+  return (
+    <Modal title={`Editar observacion - Documento #${document.id}`} onClose={onClose}>
+      <div className="grid">
+        <div className="field">
+          <label>Observacion</label>
+          <textarea value={observation} onChange={(event) => setObservation(event.target.value)} />
+        </div>
+        {error ? <div className="error">{error}</div> : null}
+        <button className="btn" type="button" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+          Guardar observacion
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+function DeleteDocumentModal({
+  document,
+  onClose,
+  onDeleted,
+}: {
+  document: MedicalDocument
+  onClose: () => void
+  onDeleted: () => void
+}) {
+  const queryClient = useQueryClient()
+  const [error, setError] = useState('')
+  const mutation = useMutation({
+    mutationFn: async () => api.delete(`/medical-documents/${document.id}`),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['documents'] })
+      onDeleted()
+    },
+    onError: (mutationError) => setError(getErrorMessage(mutationError)),
+  })
+
+  return (
+    <Modal title={`Eliminar documento #${document.id}`} onClose={onClose}>
+      <div className="grid">
+        <p className="muted-text">Esta accion eliminara el registro del documento. Los maestros no seran modificados.</p>
+        {error ? <div className="error">{error}</div> : null}
+        <div className="header-actions" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn secondary" type="button" onClick={onClose}>Cancelar</button>
+          <button className="btn danger" type="button" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+            Eliminar
+          </button>
+        </div>
       </div>
     </Modal>
   )

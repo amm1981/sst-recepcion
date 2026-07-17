@@ -2,13 +2,17 @@
 
 namespace App\Services;
 
+use App\Mail\RejectedDocumentsReport;
 use App\Models\MedicalDocument;
 use App\Models\SystemSetting;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Mail;
 
 class RejectedDocumentsMailSettings
 {
     public const RECIPIENTS_KEY = 'rejected_documents_report_recipients';
+    public const LAST_SENT_KEY = 'rejected_documents_report_last_sent_at';
 
     public function recipients(): array
     {
@@ -47,6 +51,52 @@ class RejectedDocumentsMailSettings
             ->whereDate('status_changed_at', today())
             ->latest('status_changed_at')
             ->get();
+    }
+
+    public function reportSentToday(): bool
+    {
+        $setting = SystemSetting::where('key', self::LAST_SENT_KEY)->first();
+        $value = is_array($setting?->value) ? ($setting->value['sent_at'] ?? null) : null;
+
+        return $value ? Carbon::parse($value)->isToday() : false;
+    }
+
+    public function markReportSent(): void
+    {
+        SystemSetting::updateOrCreate(
+            ['key' => self::LAST_SENT_KEY],
+            ['value' => ['sent_at' => now()->toISOString()]],
+        );
+    }
+
+    public function sendRejectedReport(bool $isTest = false): int
+    {
+        $recipients = $this->recipients();
+        if ($recipients === []) {
+            return 0;
+        }
+
+        $documents = $this->rejectedToday();
+        if ($documents->isEmpty()) {
+            return 0;
+        }
+
+        Mail::to($recipients)->send(new RejectedDocumentsReport($documents, $isTest));
+
+        if (! $isTest) {
+            $this->markReportSent();
+        }
+
+        return $documents->count();
+    }
+
+    public function resendIfReportWasAlreadySentToday(): int
+    {
+        if (! $this->reportSentToday()) {
+            return 0;
+        }
+
+        return $this->sendRejectedReport();
     }
 
     public function sampleDocuments(): Collection

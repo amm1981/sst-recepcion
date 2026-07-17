@@ -9,6 +9,7 @@ use App\Models\MedicalDocument;
 use App\Models\MedicalDocumentFile;
 use App\Models\MedicalDocumentStatusHistory;
 use App\Models\Worker;
+use App\Services\RejectedDocumentsMailSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -185,8 +186,36 @@ class MedicalDocumentController extends Controller
 
         $medicalDocument->update($data);
         $this->audit($request, 'updated', 'medical_documents', $medicalDocument->id);
+        $this->resendRejectedReportIfNeeded($medicalDocument);
 
         return response()->json($medicalDocument->fresh(['type', 'worker', 'deliveryRelation', 'files']));
+    }
+
+    public function updateObservation(Request $request, MedicalDocument $medicalDocument)
+    {
+        abort_unless($request->user()->hasRole('ADMIN'), 403);
+
+        $data = $request->validate([
+            'observation' => ['nullable', 'string'],
+        ]);
+
+        $medicalDocument->update([
+            'observation' => $data['observation'] ?? null,
+        ]);
+
+        $this->audit($request, 'observation_updated', 'medical_documents', $medicalDocument->id);
+        $this->resendRejectedReportIfNeeded($medicalDocument);
+
+        return response()->json($medicalDocument->fresh([
+            'type',
+            'worker.management',
+            'worker.sector',
+            'deliveryRelation',
+            'creator',
+            'statusChangedBy',
+            'files',
+            'history.user',
+        ]));
     }
 
     public function destroy(Request $request, MedicalDocument $medicalDocument)
@@ -195,6 +224,7 @@ class MedicalDocumentController extends Controller
 
         $medicalDocument->delete();
         $this->audit($request, 'deleted', 'medical_documents', $medicalDocument->id);
+        $this->resendRejectedReportIfNeeded($medicalDocument);
 
         return response()->json(['message' => 'Documento eliminado.']);
     }
@@ -213,7 +243,7 @@ class MedicalDocumentController extends Controller
         $allowed = [
             MedicalDocument::STATUS_PENDING => [MedicalDocument::STATUS_RECEIVED, MedicalDocument::STATUS_REJECTED],
             MedicalDocument::STATUS_RECEIVED => [MedicalDocument::STATUS_REGISTERED, MedicalDocument::STATUS_REJECTED],
-            MedicalDocument::STATUS_REGISTERED => [],
+            MedicalDocument::STATUS_REGISTERED => $request->user()->hasRole('ADMIN') ? [MedicalDocument::STATUS_REJECTED] : [],
             MedicalDocument::STATUS_REJECTED => [],
         ];
 
@@ -242,6 +272,8 @@ class MedicalDocumentController extends Controller
                 'to' => $data['status'],
             ]);
         });
+
+        $this->resendRejectedReportIfNeeded($medicalDocument->fresh());
 
         return response()->json($medicalDocument->fresh(['type', 'worker', 'deliveryRelation', 'history.user']));
     }
@@ -395,9 +427,9 @@ class MedicalDocumentController extends Controller
         if ($mimeType === 'image/png') {
             imagealphablending($image, false);
             imagesavealpha($image, true);
-            $stored = imagepng($image, $target, 7);
+            $stored = imagepng($image, $target, 5);
         } else {
-            $stored = imagejpeg($image, $target, 78);
+            $stored = imagejpeg($image, $target, 88);
             $mimeType = 'image/jpeg';
             $name = preg_replace('/\.[^.]+$/', '.jpg', $name) ?: ($name . '.jpg');
         }
@@ -487,6 +519,15 @@ class MedicalDocumentController extends Controller
         if (! $user->hasRole('ADMIN') && ! $user->hasRole('SST') && $document->created_by !== $user->id) {
             abort(403, 'No puede ver documentos creados por otros usuarios.');
         }
+    }
+
+    private function resendRejectedReportIfNeeded(MedicalDocument $document): void
+    {
+        if ($document->status !== MedicalDocument::STATUS_REJECTED) {
+            return;
+        }
+
+        app(RejectedDocumentsMailSettings::class)->resendIfReportWasAlreadySentToday();
     }
 
     private function audit(Request $request, string $action, string $entity, ?int $entityId = null, array $metadata = []): void
