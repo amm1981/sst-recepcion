@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'permission' => \App\Http\Middleware\EnsurePermission::class,
+            'bi.documents' => \App\Http\Middleware\EnsureBiDocumentsToken::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

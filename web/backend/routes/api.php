@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BiDocumentController;
 use App\Http\Controllers\Api\MailSettingsController;
 use App\Http\Controllers\Api\MedicalDocumentController;
 use App\Http\Controllers\Api\ProfileController;
@@ -18,6 +19,10 @@ Route::get('/medical-documents/files/{file}/download-signed', [MedicalDocumentCo
 Route::get('/medical-documents/files/{file}/preview-signed', [MedicalDocumentController::class, 'signedPreviewFile'])
     ->middleware('signed')
     ->name('medical-documents.files.preview-signed');
+
+Route::middleware(['auth:sanctum', 'bi.documents'])->prefix('bi')->group(function () {
+    Route::get('/documents', [BiDocumentController::class, 'index']);
+});
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);

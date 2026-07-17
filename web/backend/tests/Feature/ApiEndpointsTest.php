@@ -258,6 +258,62 @@ class ApiEndpointsTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_bi_documents_api_returns_all_documents_without_business_filters(): void
+    {
+        $user = $this->adminUser();
+        $registeredFixtures = $this->documentFixtures($user);
+        $rejectedFixtures = $this->documentFixtures($user);
+        $registered = MedicalDocument::create($registeredFixtures + ['status' => MedicalDocument::STATUS_REGISTERED]);
+        MedicalDocument::create($rejectedFixtures + ['status' => MedicalDocument::STATUS_REJECTED]);
+        $token = $user->createToken('bi-documents', ['bi.documents.read'], now()->addYear())->plainTextToken;
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/bi/documents?status=' . MedicalDocument::STATUS_REJECTED . '&from=2026-01-01&per_page=1')
+            ->assertOk()
+            ->assertJsonPath('meta.total', 2)
+            ->assertJsonPath('meta.per_page', 1)
+            ->assertJsonStructure([
+                'data' => [[
+                    'document_id',
+                    'document_number',
+                    'registered_at',
+                    'document_type' => ['id', 'name', 'code'],
+                    'status',
+                    'registrar' => ['id', 'user', 'name', 'email'],
+                    'worker' => ['id', 'dni', 'full_name', 'first_name', 'last_name', 'email', 'phone', 'position'],
+                    'organization' => ['management_id', 'management', 'sector_id', 'sector', 'fundo'],
+                    'delivery' => ['relation_id', 'relation', 'relation_detail', 'deliverer_name', 'deliverer_document', 'contact_number'],
+                    'files' => ['count', 'items'],
+                    'status_history',
+                ]],
+                'meta' => ['current_page', 'per_page', 'last_page', 'total'],
+                'links' => ['first', 'last', 'prev', 'next'],
+            ]);
+
+        $this->assertDatabaseHas('medical_documents', ['id' => $registered->id]);
+    }
+
+    public function test_bi_documents_api_rejects_regular_web_tokens(): void
+    {
+        $user = $this->adminUser();
+        $token = $user->createToken('web')->plainTextToken;
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/bi/documents')
+            ->assertForbidden();
+    }
+
+    public function test_bi_documents_api_rejects_tokens_from_inactive_users(): void
+    {
+        $user = $this->adminUser();
+        $token = $user->createToken('bi-documents', ['bi.documents.read'], now()->addYear())->plainTextToken;
+        $user->update(['is_active' => false]);
+
+        $this->withHeader('Authorization', "Bearer {$token}")
+            ->getJson('/api/bi/documents')
+            ->assertForbidden();
+    }
+
     public function test_rejecting_registered_document_updates_observation_and_sends_update_after_daily_report_window(): void
     {
         Mail::fake();
