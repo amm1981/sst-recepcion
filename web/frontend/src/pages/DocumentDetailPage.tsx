@@ -8,6 +8,20 @@ import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import type { MedicalDocument, MedicalDocumentFile, Status } from '../types'
 
+const ALL_STATUSES: Status[] = ['PENDIENTE', 'RECEPCIONADO', 'REGISTRADO', 'RECHAZADO']
+
+function allowedStatusTransitions(current: Status, isAdmin: boolean): Status[] {
+  if (isAdmin) {
+    return ALL_STATUSES.filter((item) => item !== current)
+  }
+
+  return current === 'PENDIENTE'
+    ? ['RECEPCIONADO', 'RECHAZADO']
+    : current === 'RECEPCIONADO'
+      ? ['REGISTRADO', 'RECHAZADO']
+      : []
+}
+
 function isPreviewable(file: MedicalDocumentFile): boolean {
   const mime = file.mime_type ?? ''
   return mime.startsWith('image/') || mime === 'application/pdf'
@@ -38,9 +52,7 @@ export function DocumentDetailPage() {
 
   const data = document.data
   const isAdmin = user?.role?.code === 'ADMIN'
-  const canChangeStatus = can('documents.updateStatus') && (
-    ['PENDIENTE', 'RECEPCIONADO'].includes(data.status) || (isAdmin && data.status === 'REGISTRADO')
-  )
+  const canChangeStatus = can('documents.updateStatus') && allowedStatusTransitions(data.status, isAdmin).length > 0
 
   async function downloadFile(fileId: number, fileName: string) {
     const response = await api.get(`/medical-documents/files/${fileId}/download`, { responseType: 'blob' })
@@ -349,14 +361,7 @@ function DetailStatusModal({ document, onClose }: { document: MedicalDocument; o
   const [status, setStatus] = useState<Status | ''>('')
   const [observation, setObservation] = useState('')
   const [error, setError] = useState('')
-  const allowed: Status[] =
-    document.status === 'PENDIENTE'
-      ? ['RECEPCIONADO', 'RECHAZADO']
-      : document.status === 'RECEPCIONADO'
-        ? ['REGISTRADO', 'RECHAZADO']
-        : isAdmin && document.status === 'REGISTRADO'
-          ? ['RECHAZADO']
-        : []
+  const allowed = allowedStatusTransitions(document.status, isAdmin)
   const mutation = useMutation({
     mutationFn: async () => api.post(`/medical-documents/${document.id}/status`, { status, observation }),
     onSuccess: async () => {

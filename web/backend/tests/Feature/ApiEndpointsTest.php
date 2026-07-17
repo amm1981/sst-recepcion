@@ -277,6 +277,59 @@ class ApiEndpointsTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_admin_can_change_rejected_document_back_to_registered(): void
+    {
+        $user = $this->adminUser();
+        $document = MedicalDocument::create($this->documentFixtures($user) + [
+            'status' => MedicalDocument::STATUS_REJECTED,
+            'observation' => 'Documento rechazado.',
+            'status_changed_by' => $user->id,
+            'status_changed_at' => now(),
+        ]);
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/medical-documents/{$document->id}/status", [
+            'status' => MedicalDocument::STATUS_REGISTERED,
+            'observation' => 'Regularizado por administrador.',
+        ])->assertOk()
+            ->assertJsonPath('status', MedicalDocument::STATUS_REGISTERED);
+
+        $this->assertDatabaseHas('medical_documents', [
+            'id' => $document->id,
+            'status' => MedicalDocument::STATUS_REGISTERED,
+        ]);
+        $this->assertDatabaseHas('medical_document_status_history', [
+            'medical_document_id' => $document->id,
+            'from_status' => MedicalDocument::STATUS_REJECTED,
+            'to_status' => MedicalDocument::STATUS_REGISTERED,
+            'observation' => 'Regularizado por administrador.',
+        ]);
+    }
+
+    public function test_non_admin_cannot_change_rejected_document_back_to_registered(): void
+    {
+        $admin = $this->adminUser();
+        $role = Role::create([
+            'name' => 'Seguridad y Salud en el Trabajo',
+            'code' => 'SST',
+            'is_active' => true,
+        ]);
+        $permission = Permission::where('code', 'documents.updateStatus')->firstOrFail();
+        $role->permissions()->attach($permission->id);
+        $user = User::factory()->create(['role_id' => $role->id]);
+        $document = MedicalDocument::create($this->documentFixtures($admin) + [
+            'status' => MedicalDocument::STATUS_REJECTED,
+            'status_changed_by' => $admin->id,
+            'status_changed_at' => now(),
+        ]);
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/medical-documents/{$document->id}/status", [
+            'status' => MedicalDocument::STATUS_REGISTERED,
+        ])->assertStatus(422)
+            ->assertJsonPath('message', 'Transicion de estado no permitida.');
+    }
+
     public function test_report_pdf_export_returns_a_pdf_file(): void
     {
         $user = $this->adminUser();

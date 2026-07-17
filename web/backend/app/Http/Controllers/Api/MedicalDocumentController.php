@@ -234,6 +234,7 @@ class MedicalDocumentController extends Controller
     {
         $data = $request->validate([
             'status' => ['required', Rule::in([
+                MedicalDocument::STATUS_PENDING,
                 MedicalDocument::STATUS_RECEIVED,
                 MedicalDocument::STATUS_REGISTERED,
                 MedicalDocument::STATUS_REJECTED,
@@ -241,14 +242,9 @@ class MedicalDocumentController extends Controller
             'observation' => [Rule::requiredIf($request->status === MedicalDocument::STATUS_REJECTED), 'nullable', 'string'],
         ]);
 
-        $allowed = [
-            MedicalDocument::STATUS_PENDING => [MedicalDocument::STATUS_RECEIVED, MedicalDocument::STATUS_REJECTED],
-            MedicalDocument::STATUS_RECEIVED => [MedicalDocument::STATUS_REGISTERED, MedicalDocument::STATUS_REJECTED],
-            MedicalDocument::STATUS_REGISTERED => $request->user()->hasRole('ADMIN') ? [MedicalDocument::STATUS_REJECTED] : [],
-            MedicalDocument::STATUS_REJECTED => [],
-        ];
+        $allowed = $this->allowedStatusTransitions($request, $medicalDocument);
 
-        if (! in_array($data['status'], $allowed[$medicalDocument->status] ?? [], true)) {
+        if (! in_array($data['status'], $allowed, true)) {
             return response()->json(['message' => 'Transicion de estado no permitida.'], 422);
         }
 
@@ -283,6 +279,25 @@ class MedicalDocumentController extends Controller
         $this->sendRejectedReportIfNeeded($medicalDocument->fresh());
 
         return response()->json($medicalDocument->fresh(['type', 'worker', 'deliveryRelation', 'history.user']));
+    }
+
+    private function allowedStatusTransitions(Request $request, MedicalDocument $document): array
+    {
+        if ($request->user()->canDo('admin.manage')) {
+            return collect([
+                MedicalDocument::STATUS_PENDING,
+                MedicalDocument::STATUS_RECEIVED,
+                MedicalDocument::STATUS_REGISTERED,
+                MedicalDocument::STATUS_REJECTED,
+            ])->reject(fn (string $status) => $status === $document->status)->values()->all();
+        }
+
+        return [
+            MedicalDocument::STATUS_PENDING => [MedicalDocument::STATUS_RECEIVED, MedicalDocument::STATUS_REJECTED],
+            MedicalDocument::STATUS_RECEIVED => [MedicalDocument::STATUS_REGISTERED, MedicalDocument::STATUS_REJECTED],
+            MedicalDocument::STATUS_REGISTERED => [],
+            MedicalDocument::STATUS_REJECTED => [],
+        ][$document->status] ?? [];
     }
 
     public function history(Request $request, MedicalDocument $medicalDocument)

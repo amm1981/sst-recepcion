@@ -18,6 +18,20 @@ const QUICK_DATE_RANGES = [
   { label: 'Ultimos 45 dias', days: 45 },
 ]
 
+const ALL_STATUSES: Status[] = ['PENDIENTE', 'RECEPCIONADO', 'REGISTRADO', 'RECHAZADO']
+
+function allowedStatusTransitions(current: Status, isAdmin: boolean): Status[] {
+  if (isAdmin) {
+    return ALL_STATUSES.filter((item) => item !== current)
+  }
+
+  return current === 'PENDIENTE'
+    ? ['RECEPCIONADO', 'RECHAZADO']
+    : current === 'RECEPCIONADO'
+      ? ['REGISTRADO', 'RECHAZADO']
+      : []
+}
+
 function formatDateInput(date: Date) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -90,7 +104,7 @@ export function DocumentsPage() {
         header: 'Acciones',
         cell: ({ row }) => (
           <div className="header-actions" style={{ justifyContent: 'flex-end', gap: 4 }}>
-            {can('documents.updateStatus') && (['PENDIENTE', 'RECEPCIONADO'].includes(row.original.status) || (isAdmin && row.original.status === 'REGISTRADO')) ? (
+            {can('documents.updateStatus') && allowedStatusTransitions(row.original.status, isAdmin).length > 0 ? (
               <button className="icon-btn ghost" type="button" onClick={() => setSelected(row.original)} title="Cambiar estado" style={{ color: '#047857' }}>
                 <RefreshCw size={18} />
               </button>
@@ -315,14 +329,9 @@ function StatusModal({ document, onClose }: { document: MedicalDocument; onClose
   const [nextStatus, setNextStatus] = useState<Status | ''>('')
   const [observation, setObservation] = useState('')
   const [error, setError] = useState('')
-  const allowed: Status[] =
-    document.status === 'PENDIENTE'
-      ? ['RECEPCIONADO', 'RECHAZADO']
-      : document.status === 'RECEPCIONADO'
-        ? ['REGISTRADO', 'RECHAZADO']
-        : document.status === 'REGISTRADO'
-          ? ['RECHAZADO']
-        : []
+  const { user } = useAuth()
+  const isAdmin = user?.role?.code === 'ADMIN'
+  const allowed = allowedStatusTransitions(document.status, isAdmin)
 
   const mutation = useMutation({
     mutationFn: async () => api.post(`/medical-documents/${document.id}/status`, { status: nextStatus, observation }),
