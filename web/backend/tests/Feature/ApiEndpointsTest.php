@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\DeliveryRelation;
 use App\Models\Management;
 use App\Models\MedicalDocument;
+use App\Models\MedicalDocumentStatusHistory;
 use App\Models\MedicalDocumentType;
 use App\Models\Notification;
 use App\Models\Permission;
@@ -160,6 +161,40 @@ class ApiEndpointsTest extends TestCase
             ->assertJsonPath('by_status.0.total', 1)
             ->assertJsonPath('by_type.0.registrados', 1)
             ->assertJsonPath('by_type.0.pendientes', 0);
+    }
+
+    public function test_report_workers_history_applies_search_and_returns_status_history(): void
+    {
+        $user = $this->adminUser();
+        $fixtures = $this->documentFixtures($user);
+        $document = MedicalDocument::create($fixtures + ['status' => MedicalDocument::STATUS_REGISTERED]);
+        $worker = Worker::findOrFail($fixtures['worker_id']);
+
+        MedicalDocumentStatusHistory::create([
+            'medical_document_id' => $document->id,
+            'from_status' => null,
+            'to_status' => MedicalDocument::STATUS_PENDING,
+            'observation' => 'Documento creado.',
+            'changed_by' => $user->id,
+            'created_at' => now()->subMinute(),
+            'updated_at' => now()->subMinute(),
+        ]);
+        MedicalDocumentStatusHistory::create([
+            'medical_document_id' => $document->id,
+            'from_status' => MedicalDocument::STATUS_RECEIVED,
+            'to_status' => MedicalDocument::STATUS_REGISTERED,
+            'observation' => 'Validado por SST.',
+            'changed_by' => $user->id,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/reports/workers-history?q=' . $worker->dni . '&status=' . MedicalDocument::STATUS_REGISTERED)
+            ->assertOk()
+            ->assertJsonPath('data.0.dni', $worker->dni)
+            ->assertJsonPath('data.0.documents_count', 1)
+            ->assertJsonPath('data.0.documents.0.id', $document->id)
+            ->assertJsonFragment(['to_status' => MedicalDocument::STATUS_REGISTERED]);
     }
 
     public function test_report_pdf_export_returns_a_pdf_file(): void

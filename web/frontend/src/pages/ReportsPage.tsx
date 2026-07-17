@@ -2,10 +2,13 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import { Link } from 'react-router-dom'
 import { FilterSelect } from '../components/FilterSelect'
-import { FileText, Clock, Inbox, CheckCircle2, XCircle, FileSpreadsheet, Upload } from 'lucide-react'
+import { FileText, Clock, Inbox, CheckCircle2, XCircle, FileSpreadsheet, Eye, ChevronLeft, ChevronRight } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, LabelList, LineChart, Line } from 'recharts'
 import { useMemo, useState } from 'react'
-import type { RegistrarSummary } from '../types'
+import { Modal } from '../components/Modal'
+import { SearchBar } from '../components/SearchBar'
+import { StatusBadge } from '../components/StatusBadge'
+import type { Paginated, RegisteredWorker, RegistrarSummary } from '../types'
 
 type ReportSummary = {
   total: number
@@ -23,6 +26,7 @@ type Catalogs = {
 
 export function ReportsPage() {
   const [filters, setFilters] = useState({
+    q: '',
     from: '',
     to: '',
     type_id: '',
@@ -31,6 +35,14 @@ export function ReportsPage() {
     sector_id: '',
     created_by: ''
   })
+  const [historyPage, setHistoryPage] = useState(1)
+  const [selectedWorker, setSelectedWorker] = useState<RegisteredWorker | null>(null)
+  const historyPerPage = 8
+
+  const updateFilter = (key: keyof typeof filters, value: string) => {
+    setFilters(current => ({ ...current, [key]: value }))
+    setHistoryPage(1)
+  }
   
   const catalogs = useQuery({
     queryKey: ['catalogs'],
@@ -40,25 +52,26 @@ export function ReportsPage() {
   const report = useQuery({
     queryKey: ['reports', filters],
     queryFn: async () => {
-      const params = new URLSearchParams()
-      if (filters.from) params.append('from', filters.from)
-      if (filters.to) params.append('to', filters.to)
-      if (filters.type_id) params.append('type_id', filters.type_id)
-      if (filters.status) params.append('status', filters.status)
-      if (filters.management_id) params.append('management_id', filters.management_id)
-      if (filters.sector_id) params.append('sector_id', filters.sector_id)
-      if (filters.created_by) params.append('created_by', filters.created_by)
+      const params = buildReportParams(filters)
       return (await api.get<ReportSummary>(`/reports/summary?${params.toString()}`)).data
     },
   })
 
   const registrars = useQuery({
-    queryKey: ['report-registrars', filters.from, filters.to],
+    queryKey: ['report-registrars', filters.q, filters.from, filters.to, filters.type_id, filters.status, filters.management_id, filters.sector_id],
     queryFn: async () => {
-      const params = new URLSearchParams()
-      if (filters.from) params.append('from', filters.from)
-      if (filters.to) params.append('to', filters.to)
+      const params = buildReportParams({ ...filters, created_by: '' })
       return (await api.get<RegistrarSummary[]>(`/reports/registrars?${params.toString()}`)).data
+    },
+  })
+
+  const workersHistory = useQuery({
+    queryKey: ['report-workers-history', filters, historyPage],
+    queryFn: async () => {
+      const params = buildReportParams(filters)
+      params.set('page', String(historyPage))
+      params.set('per_page', String(historyPerPage))
+      return (await api.get<Paginated<RegisteredWorker>>(`/reports/workers-history?${params.toString()}`)).data
     },
   })
 
@@ -84,27 +97,6 @@ export function ReportsPage() {
       rechazados: acc.rechazados + Number(curr.rechazados),
     }), { pendientes: 0, recepcionados: 0, registrados: 0, rechazados: 0 })
   }, [report.data])
-
-  const handleGenerate = () => {
-    report.refetch()
-  }
-
-  const handleExportPdf = async () => {
-    try {
-      const params = buildReportParams(filters)
-      const response = await api.get(`/reports/export/pdf?${params.toString()}`, { responseType: 'blob' })
-      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }))
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', 'reporte_documentos.pdf')
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      window.URL.revokeObjectURL(url)
-    } catch (e) {
-      console.error('Error exporting pdf', e)
-    }
-  }
 
   const handleExportExcel = async () => {
     try {
@@ -150,6 +142,12 @@ export function ReportsPage() {
     [report.data],
   )
 
+  const historyMeta = workersHistory.data
+  const historyFrom = historyMeta?.total ? ((historyMeta.current_page - 1) * historyPerPage) + 1 : 0
+  const historyTo = historyMeta?.total ? Math.min(historyMeta.current_page * historyPerPage, historyMeta.total) : 0
+  const historyLastPage = historyMeta?.last_page ?? 1
+  const historyCurrentPage = historyMeta?.current_page ?? 1
+
   return (
     <div>
       <div className="breadcrumb">
@@ -163,18 +161,26 @@ export function ReportsPage() {
       <div className="report-filters">
         <div className="report-filters-row">
           <div className="field">
+            <label>Buscar</label>
+            <SearchBar
+              placeholder="DNI, nombre, Nro o tipo..."
+              value={filters.q}
+              onChange={value => updateFilter('q', value)}
+            />
+          </div>
+          <div className="field">
             <label>Fecha Desde</label>
-            <input type="date" value={filters.from} onChange={e => setFilters({...filters, from: e.target.value})} />
+            <input type="date" value={filters.from} onChange={e => updateFilter('from', e.target.value)} />
           </div>
           <div className="field">
             <label>Fecha Hasta</label>
-            <input type="date" value={filters.to} onChange={e => setFilters({...filters, to: e.target.value})} />
+            <input type="date" value={filters.to} onChange={e => updateFilter('to', e.target.value)} />
           </div>
           <div className="field">
             <label>Tipo de Documento</label>
             <FilterSelect 
               value={filters.type_id}
-              onChange={val => setFilters({...filters, type_id: val})}
+              onChange={val => updateFilter('type_id', val)}
               options={catalogs.data?.medical_document_types?.map(t => ({ value: String(t.id), label: t.name })) || []}
               placeholder="Todos los tipos"
             />
@@ -183,7 +189,7 @@ export function ReportsPage() {
             <label>Estado</label>
             <FilterSelect 
               value={filters.status}
-              onChange={val => setFilters({...filters, status: val})}
+              onChange={val => updateFilter('status', val)}
               options={[
                 { value: 'PENDIENTE', label: 'Pendiente' },
                 { value: 'RECEPCIONADO', label: 'Recepcionado' },
@@ -197,7 +203,7 @@ export function ReportsPage() {
             <label>Usuario Registrador</label>
             <FilterSelect
               value={filters.created_by}
-              onChange={val => setFilters({...filters, created_by: val})}
+              onChange={val => updateFilter('created_by', val)}
               options={registrars.data?.map(user => ({ value: String(user.id), label: `${user.name} (${user.documents_count ?? 0})` })) || []}
               placeholder="Todos los usuarios"
             />
@@ -206,7 +212,7 @@ export function ReportsPage() {
             <label>Gerencia</label>
             <FilterSelect 
               value={filters.management_id}
-              onChange={val => setFilters({...filters, management_id: val})}
+              onChange={val => updateFilter('management_id', val)}
               options={catalogs.data?.managements?.map(t => ({ value: String(t.id), label: t.name })) || []}
               placeholder="Todas las gerencias"
             />
@@ -215,17 +221,15 @@ export function ReportsPage() {
             <label>Sector</label>
             <FilterSelect 
               value={filters.sector_id}
-              onChange={val => setFilters({...filters, sector_id: val})}
+              onChange={val => updateFilter('sector_id', val)}
               options={catalogs.data?.sectors?.map(t => ({ value: String(t.id), label: t.name })) || []}
               placeholder="Todos los sectores"
             />
           </div>
         </div>
         <div className="report-filters-actions">
-          <button className="btn" onClick={handleGenerate}><Upload size={18} style={{ transform: 'rotate(180deg)' }} /> Generar Reporte</button>
           <button className="btn btn-export" onClick={handleExportExcel}><FileSpreadsheet size={18} /> Exportar Excel</button>
           <button className="btn btn-export" onClick={handleExportDetailExcel}><FileSpreadsheet size={18} /> Exportar Detalle</button>
-          <button className="btn btn-export" onClick={handleExportPdf}><FileText size={18} /> Exportar PDF</button>
         </div>
       </div>
 
@@ -378,11 +382,74 @@ export function ReportsPage() {
           </div>
         </div>
       </div>
+
+      <div className="grid hero" style={{ marginTop: 24 }}>
+        <div className="report-panel">
+          <h2>Historial de Documentos por Trabajador</h2>
+          <div className="report-panel-content" style={{ justifyContent: 'flex-start', overflow: 'auto' }}>
+            <table className="report-table">
+              <thead>
+                <tr>
+                  <th>Trabajador</th>
+                  <th>Area/Gerencia</th>
+                  <th>Sector</th>
+                  <th>Documentos</th>
+                  <th>Ultimo estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {workersHistory.data?.data.map(worker => {
+                  const latestDocument = worker.documents?.[0]
+                  return (
+                    <tr key={worker.id}>
+                      <td>
+                        <strong>{worker.first_name} {worker.last_name}</strong>
+                        <div className="muted-text">DNI {worker.dni}</div>
+                      </td>
+                      <td>{worker.area ?? worker.management?.name ?? '-'}</td>
+                      <td>{worker.sector?.name ?? '-'}</td>
+                      <td className="num">{worker.documents_count}</td>
+                      <td>{latestDocument ? <StatusBadge status={latestDocument.status} /> : '-'}</td>
+                      <td>
+                        <button className="icon-btn ghost" type="button" title="Ver historial" onClick={() => setSelectedWorker(worker)}>
+                          <Eye size={18} />
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+                {workersHistory.data?.data.length === 0 ? (
+                  <tr><td colSpan={6}>Sin trabajadores con documentos para los filtros seleccionados.</td></tr>
+                ) : null}
+              </tbody>
+            </table>
+
+            {historyMeta?.total ? (
+              <div className="table-footer">
+                <span>Mostrando {historyFrom} a {historyTo} de {historyMeta.total} trabajadores</span>
+                <div className="pagination">
+                  <button className="page-btn" disabled={historyCurrentPage <= 1} onClick={() => setHistoryPage(historyCurrentPage - 1)}>
+                    <ChevronLeft size={16} />
+                  </button>
+                  <span className="page-btn active">{historyCurrentPage}</span>
+                  <button className="page-btn" disabled={historyCurrentPage >= historyLastPage} onClick={() => setHistoryPage(historyCurrentPage + 1)}>
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      {selectedWorker ? <WorkerHistoryModal worker={selectedWorker} onClose={() => setSelectedWorker(null)} /> : null}
     </div>
   )
 }
 
 function buildReportParams(filters: {
+  q: string
   from: string
   to: string
   type_id: string
@@ -392,6 +459,7 @@ function buildReportParams(filters: {
   created_by: string
 }) {
   const params = new URLSearchParams()
+  if (filters.q) params.append('q', filters.q)
   if (filters.from) params.append('from', filters.from)
   if (filters.to) params.append('to', filters.to)
   if (filters.type_id) params.append('type_id', filters.type_id)
@@ -400,4 +468,58 @@ function buildReportParams(filters: {
   if (filters.sector_id) params.append('sector_id', filters.sector_id)
   if (filters.created_by) params.append('created_by', filters.created_by)
   return params
+}
+
+function WorkerHistoryModal({ worker, onClose }: { worker: RegisteredWorker; onClose: () => void }) {
+  return (
+    <Modal title={`${worker.first_name} ${worker.last_name}`} onClose={onClose}>
+      <div className="grid two" style={{ marginBottom: 18 }}>
+        <Info label="DNI" value={worker.dni} />
+        <Info label="Cargo" value={worker.position} />
+        <Info label="Area/Gerencia" value={worker.area ?? worker.management?.name} />
+        <Info label="Sector" value={worker.sector?.name} />
+      </div>
+
+      <div className="timeline">
+        {worker.documents.map(document => (
+          <div className="file-row" key={document.id} style={{ alignItems: 'flex-start' }}>
+            <div style={{ display: 'grid', gap: 8, minWidth: 0 }}>
+              <strong>#{document.id} - {document.type?.name ?? 'Documento medico'}</strong>
+              <span className="muted-text">{new Date(document.created_at).toLocaleString('es-PE')}</span>
+              <span className="muted-text">Registrador: {document.creator?.name ?? '-'}</span>
+              {document.history?.length ? (
+                <div className="timeline" style={{ gap: 8, marginTop: 4 }}>
+                  {document.history.map(item => (
+                    <div className="timeline-item" key={item.id}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <StatusBadge status={item.to_status} />
+                        <span className="muted-text">{new Date(item.created_at).toLocaleString('es-PE')}</span>
+                        <span className="muted-text">{item.user?.name ?? '-'}</span>
+                      </div>
+                      {item.observation ? <div className="muted-text" style={{ marginTop: 4 }}>{item.observation}</div> : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <StatusBadge status={document.status} />
+              <Link className="icon-btn ghost" title="Abrir detalle" to={`/documents/${document.id}`}>
+                <Eye size={18} />
+              </Link>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  )
+}
+
+function Info({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div>
+      <div className="muted-text">{label}</div>
+      <strong>{value || '-'}</strong>
+    </div>
+  )
 }

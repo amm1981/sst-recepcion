@@ -47,6 +47,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/reports/registrars', [ReportController::class, 'registrars'])->middleware('permission:reports.view');
     Route::get('/reports/summary', [ReportController::class, 'summary'])->middleware('permission:reports.view');
+    Route::get('/reports/workers-history', [ReportController::class, 'workersHistory'])->middleware('permission:reports.view');
     Route::get('/reports/export/excel', [ReportController::class, 'exportExcel'])->middleware('permission:reports.view');
     Route::get('/reports/export/detail-excel', [ReportController::class, 'exportDetailExcel'])->middleware('permission:reports.view');
     Route::get('/reports/export/pdf', [ReportController::class, 'exportPdf'])->middleware('permission:reports.view');

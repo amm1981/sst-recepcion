@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\MedicalDocument;
 use App\Models\User;
+use App\Models\Worker;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\URL;
 
@@ -142,6 +144,32 @@ class ReportController extends Controller
             ]);
 
         return response()->json($users->values());
+    }
+
+    public function workersHistory(Request $request)
+    {
+        $documentFilter = function ($query) use ($request) {
+            $this->applyFilters($query, $request);
+        };
+
+        $documentDetail = function ($query) use ($documentFilter) {
+            $documentFilter($query);
+            $query->with(['type', 'creator', 'history.user'])
+                ->latest('medical_documents.created_at');
+        };
+
+        $query = Worker::query()
+            ->with(['management', 'sector'])
+            ->withCount(['medicalDocuments as documents_count' => $documentFilter])
+            ->with(['medicalDocuments' => $documentDetail])
+            ->whereHas('medicalDocuments', $documentFilter)
+            ->latest('workers.updated_at');
+
+        /** @var LengthAwarePaginator $paginator */
+        $paginator = $query->paginate($request->integer('per_page', 10));
+        $paginator->getCollection()->transform(fn (Worker $worker) => $this->workerHistoryPayload($worker));
+
+        return response()->json($paginator);
     }
 
     public function exportExcel(Request $request)
@@ -406,6 +434,43 @@ class ReportController extends Controller
             'registered' => (clone $base)->where('medical_documents.status', 'REGISTRADO')->count(),
             'rejected' => (clone $base)->where('medical_documents.status', 'RECHAZADO')->count(),
             'by_type' => $byType,
+        ];
+    }
+
+    private function workerHistoryPayload(Worker $worker): array
+    {
+        $payload = is_array($worker->external_payload) ? $worker->external_payload : [];
+        $area = $payload['area_desc'] ?? $worker->management?->name;
+        $fundo = $payload['fundo'] ?? $payload['sede'] ?? $worker->sector?->name;
+
+        return [
+            'id' => $worker->id,
+            'dni' => $worker->dni,
+            'first_name' => $worker->first_name,
+            'last_name' => $worker->last_name,
+            'email' => $worker->email,
+            'phone' => $worker->phone,
+            'position' => $worker->position,
+            'area' => $area,
+            'fundo' => $fundo,
+            'management' => $worker->management,
+            'sector' => $worker->sector,
+            'documents_count' => (int) $worker->documents_count,
+            'documents' => $worker->medicalDocuments->map(fn (MedicalDocument $document) => [
+                'id' => $document->id,
+                'status' => $document->status,
+                'created_at' => $document->created_at,
+                'type' => $document->type,
+                'creator' => $document->creator,
+                'history' => $document->history->map(fn ($history) => [
+                    'id' => $history->id,
+                    'from_status' => $history->from_status,
+                    'to_status' => $history->to_status,
+                    'observation' => $history->observation,
+                    'created_at' => $history->created_at,
+                    'user' => $history->user,
+                ])->values(),
+            ])->values(),
         ];
     }
 
