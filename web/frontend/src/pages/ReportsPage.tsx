@@ -54,7 +54,7 @@ export function ReportsPage() {
     setFilters(current => ({ ...current, [key]: value }))
     setHistoryPage(1)
   }
-  
+
   const catalogs = useQuery({
     queryKey: ['catalogs'],
     queryFn: async () => (await api.get<Catalogs>('/sync/catalogs')).data
@@ -119,7 +119,7 @@ export function ReportsPage() {
   const handleExportExcel = async () => {
     try {
       const params = buildReportParams(filters)
-      
+
       const response = await api.get(`/reports/export/excel?${params.toString()}`, { responseType: 'blob' })
       const url = window.URL.createObjectURL(new Blob([response.data]))
       const link = document.createElement('a')
@@ -171,7 +171,7 @@ export function ReportsPage() {
       <div className="breadcrumb">
         <Link to="/dashboard">Inicio</Link> &gt; <span>Reportes</span>
       </div>
-      
+
       <div className="page-title" style={{ marginBottom: 24, marginTop: 8 }}>
         <h1 style={{ fontSize: 24 }}>Reportes</h1>
       </div>
@@ -196,7 +196,7 @@ export function ReportsPage() {
           </div>
           <div className="field report-filter-type">
             <label>Tipo de Documento</label>
-            <FilterSelect 
+            <FilterSelect
               value={filters.type_id}
               onChange={val => updateFilter('type_id', val)}
               options={catalogs.data?.medical_document_types?.map(t => ({ value: String(t.id), label: t.name })) || []}
@@ -205,7 +205,7 @@ export function ReportsPage() {
           </div>
           <div className="field report-filter-status">
             <label>Estado</label>
-            <FilterSelect 
+            <FilterSelect
               value={filters.status}
               onChange={val => updateFilter('status', val)}
               options={[
@@ -228,7 +228,7 @@ export function ReportsPage() {
           </div>
           <div className="field report-filter-management">
             <label>Gerencia</label>
-            <FilterSelect 
+            <FilterSelect
               value={filters.management_id}
               onChange={val => updateFilter('management_id', val)}
               options={catalogs.data?.managements?.map(t => ({ value: String(t.id), label: t.name })) || []}
@@ -237,7 +237,7 @@ export function ReportsPage() {
           </div>
           <div className="field report-filter-sector">
             <label>Sector</label>
-            <FilterSelect 
+            <FilterSelect
               value={filters.sector_id}
               onChange={val => updateFilter('sector_id', val)}
               options={catalogs.data?.sectors?.map(t => ({ value: String(t.id), label: t.name })) || []}
@@ -299,7 +299,7 @@ export function ReportsPage() {
           <div className="report-ai-title">
             <BrainCircuit size={22} />
             <div>
-              <h2>Analisis ejecutivo con IA</h2>
+              <h2>Análisis con IA - beta</h2>
               <p>DeepSeek interpreta los totales consolidados del backend, sin datos sensibles de trabajadores.</p>
             </div>
           </div>
@@ -337,7 +337,7 @@ export function ReportsPage() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 13, fill: '#6b7280' }} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 13, fill: '#6b7280' }} />
-                <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} />
+                <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }} />
                 <Bar dataKey="total" radius={[6, 6, 0, 0]}>
                   {chartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
