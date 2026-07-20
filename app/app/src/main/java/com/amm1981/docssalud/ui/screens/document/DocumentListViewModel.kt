@@ -7,6 +7,7 @@ import com.amm1981.docssalud.data.repository.AuthRepository
 import com.amm1981.docssalud.data.repository.DocumentRepository
 import com.amm1981.docssalud.data.repository.DocumentUi
 import com.amm1981.docssalud.data.repository.RegistrarUi
+import com.amm1981.docssalud.workers.DocumentSyncScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -39,7 +40,8 @@ data class DocumentListState(
 class DocumentListViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val documentRepository: DocumentRepository,
-    private val connectivityMonitor: ConnectivityMonitor
+    private val connectivityMonitor: ConnectivityMonitor,
+    private val documentSyncScheduler: DocumentSyncScheduler
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(DocumentListState())
@@ -117,30 +119,17 @@ class DocumentListViewModel @Inject constructor(
                 return@launch
             }
             if (!_state.value.isOnline) {
-                _state.value = _state.value.copy(message = "Sin conexion. Los documentos siguen guardados en el equipo.")
+                documentSyncScheduler.enqueue()
+                _state.value = _state.value.copy(message = "Sin conexion. Se enviaran automaticamente cuando vuelva internet.")
                 return@launch
             }
 
-            _state.value = _state.value.copy(isUploading = true, message = null)
-            val result = documentRepository.syncPendingDocuments()
-            val remaining = documentRepository.pendingUploadCount()
-            val message = result.fold(
-                onSuccess = { uploaded ->
-                    when {
-                        remaining == 0 -> "Documentos pendientes enviados."
-                        uploaded > 0 -> "Se enviaron $uploaded documentos. Quedan $remaining pendientes."
-                        else -> "No se pudieron enviar los documentos pendientes."
-                    }
-                },
-                onFailure = { it.message ?: "No se pudieron enviar los documentos pendientes." }
-            )
-
+            documentSyncScheduler.enqueue()
             _state.value = _state.value.copy(
                 isUploading = false,
-                pendingUploadCount = remaining,
-                message = message
+                pendingUploadCount = pending,
+                message = "Subida en segundo plano iniciada. Recibira una notificacion al finalizar."
             )
-            loadDocuments(currentStatus)
         }
     }
 

@@ -1,26 +1,19 @@
 package com.amm1981.docssalud.ui.screens.document
 
-import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.ExistingWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import com.amm1981.docssalud.data.connectivity.ConnectivityMonitor
 import com.amm1981.docssalud.data.local.dao.CatalogDao
 import com.amm1981.docssalud.data.local.dao.WorkerDao
 import com.amm1981.docssalud.data.local.entity.CatalogEntity
 import com.amm1981.docssalud.data.local.entity.WorkerEntity
 import com.amm1981.docssalud.data.repository.DocumentRepository
 import com.amm1981.docssalud.data.repository.SyncRepository
-import com.amm1981.docssalud.workers.SyncWorker
+import com.amm1981.docssalud.workers.DocumentSyncScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -37,25 +30,15 @@ data class DocumentFormState(
 
 @HiltViewModel
 class DocumentFormViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val workerDao: WorkerDao,
     private val catalogDao: CatalogDao,
     private val documentRepository: DocumentRepository,
     private val syncRepository: SyncRepository,
-    private val connectivityMonitor: ConnectivityMonitor
+    private val documentSyncScheduler: DocumentSyncScheduler
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(DocumentFormState())
     val state: StateFlow<DocumentFormState> = _state.asStateFlow()
-    private var isOnline = true
-
-    init {
-        viewModelScope.launch {
-            connectivityMonitor.isOnline.collectLatest { online ->
-                isOnline = online
-            }
-        }
-    }
 
     fun loadInitialData() {
         viewModelScope.launch {
@@ -184,17 +167,7 @@ class DocumentFormViewModel @Inject constructor(
             )
 
             if (result.isSuccess) {
-                val offlineUuid = result.getOrNull()
-                if (isOnline) {
-                    val syncResult = offlineUuid
-                        ?.let { documentRepository.syncQueuedDocument(it) }
-                        ?: Result.failure(IllegalStateException("No se pudo identificar el documento local."))
-                    if (syncResult.getOrDefault(false).not()) {
-                        enqueueSyncWork()
-                    }
-                } else {
-                    enqueueSyncWork()
-                }
+                documentSyncScheduler.enqueue()
                 _state.value = _state.value.copy(isSaving = false, isSaved = true)
             } else {
                 _state.value = _state.value.copy(
@@ -203,14 +176,5 @@ class DocumentFormViewModel @Inject constructor(
                 )
             }
         }
-    }
-
-    private fun enqueueSyncWork() {
-        val workRequest = OneTimeWorkRequestBuilder<SyncWorker>().build()
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            "document-sync",
-            ExistingWorkPolicy.KEEP,
-            workRequest
-        )
     }
 }

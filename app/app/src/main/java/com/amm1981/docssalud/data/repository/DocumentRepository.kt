@@ -78,6 +78,12 @@ data class RegistrarUi(
     val documentsCount: Int
 )
 
+data class DocumentSyncResult(
+    val uploaded: Int,
+    val failed: Int,
+    val remaining: Int
+)
+
 @Singleton
 class DocumentRepository @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -142,11 +148,25 @@ class DocumentRepository @Inject constructor(
         }
     }
 
-    suspend fun processSyncQueue() = syncMutex.withLock {
+    suspend fun processSyncQueue(
+        onProgress: suspend (uploaded: Int, total: Int) -> Unit = { _, _ -> }
+    ): DocumentSyncResult = syncMutex.withLock {
         val pendingItems = syncQueueDao.getPending()
-        for (item in pendingItems) {
-            uploadQueueItem(item)
+        var uploaded = 0
+        var failed = 0
+        pendingItems.forEach { item ->
+            if (uploadQueueItem(item)) {
+                uploaded += 1
+            } else {
+                failed += 1
+            }
+            onProgress(uploaded + failed, pendingItems.size)
         }
+        DocumentSyncResult(
+            uploaded = uploaded,
+            failed = failed,
+            remaining = syncQueueDao.countPendingUpload()
+        )
     }
 
     suspend fun syncQueuedDocument(offlineUuid: String): Result<Boolean> = withContext(Dispatchers.IO) {
@@ -164,8 +184,8 @@ class DocumentRepository @Inject constructor(
         }
     }
 
-    private suspend fun uploadQueueItem(item: SyncQueueEntity) {
-        try {
+    private suspend fun uploadQueueItem(item: SyncQueueEntity): Boolean {
+        return try {
             val response = api.uploadDocument(
                 offlineUuid = textPart(item.offlineUuid),
                 medicalDocumentTypeId = textPart(item.medicalDocumentTypeId.toString()),
@@ -189,14 +209,21 @@ class DocumentRepository @Inject constructor(
             val body = response.body()
             if (response.isSuccessful && body != null) {
                 syncQueueDao.markSynced(item.id, body.id)
+                true
             } else {
-                if (!reconcileKnownRemoteDocument(item.offlineUuid)) {
+                if (reconcileKnownRemoteDocument(item.offlineUuid)) {
+                    true
+                } else {
                     syncQueueDao.updateStatus(item.id, "FAILED")
+                    false
                 }
             }
         } catch (e: Exception) {
-            if (!reconcileKnownRemoteDocument(item.offlineUuid)) {
+            if (reconcileKnownRemoteDocument(item.offlineUuid)) {
+                true
+            } else {
                 syncQueueDao.updateStatus(item.id, "FAILED")
+                false
             }
         }
     }
@@ -207,10 +234,7 @@ class DocumentRepository @Inject constructor(
 
     suspend fun syncPendingDocuments(): Result<Int> = withContext(Dispatchers.IO) {
         try {
-            val before = syncQueueDao.countPendingUpload()
-            processSyncQueue()
-            val after = syncQueueDao.countPendingUpload()
-            Result.success((before - after).coerceAtLeast(0))
+            Result.success(processSyncQueue().uploaded)
         } catch (e: Exception) {
             Result.failure(e)
         }
