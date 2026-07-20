@@ -156,7 +156,7 @@ fun DocumentFormScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(modifier = Modifier.size(24.dp), color = PrimaryGreen)
                     Spacer(modifier = Modifier.width(12.dp))
-                    Text("Comprimiendo archivos y guardando el registro...")
+                    Text("Preparando archivos y enviando el registro...")
                 }
             },
             confirmButton = {}

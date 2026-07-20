@@ -146,6 +146,44 @@ class ApiEndpointsTest extends TestCase
         Storage::disk(config('filesystems.default'))->assertExists($file->path);
     }
 
+    public function test_document_upload_is_idempotent_by_offline_uuid(): void
+    {
+        Storage::fake('local');
+
+        $user = $this->adminUser();
+        $fixtures = $this->documentFixtures($user);
+        $worker = Worker::findOrFail($fixtures['worker_id']);
+        $offlineUuid = 'mobile-test-uuid-001';
+        Sanctum::actingAs($user);
+
+        $payload = [
+            'medical_document_type_id' => $fixtures['medical_document_type_id'],
+            'worker_dni' => $worker->dni,
+            'delivery_relation_id' => $fixtures['delivery_relation_id'],
+            'deliverer_name' => 'Carlos Ramirez',
+            'contact_number' => '999111222',
+            'offline_uuid' => $offlineUuid,
+        ];
+
+        $first = $this->post('/api/sync/documents', $payload + [
+            'medical_document_file' => UploadedFile::fake()->create('descanso-medico.pdf', 128, 'application/pdf'),
+        ], ['Accept' => 'application/json'])
+            ->assertCreated()
+            ->json('id');
+
+        $this->post('/api/sync/documents', $payload + [
+            'medical_document_file' => UploadedFile::fake()->create('descanso-medico.pdf', 128, 'application/pdf'),
+        ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('id', $first);
+
+        $this->assertDatabaseCount('medical_documents', 1);
+        $this->assertDatabaseHas('medical_documents', [
+            'id' => $first,
+            'offline_uuid' => $offlineUuid,
+        ]);
+    }
+
     public function test_report_summary_applies_status_and_type_filters(): void
     {
         $user = $this->adminUser();

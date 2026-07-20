@@ -10,6 +10,7 @@ use App\Models\MedicalDocumentFile;
 use App\Models\MedicalDocumentStatusHistory;
 use App\Models\Worker;
 use App\Services\RejectedDocumentsMailSettings;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -91,6 +92,13 @@ class MedicalDocumentController extends Controller
     {
         abort_unless($request->user()->canDo('documents.create'), 403, 'No tiene permisos para crear documentos medicos.');
 
+        $offlineUuid = $this->offlineUuidFromRequest($request);
+        if ($offlineUuid && $existing = $this->findDocumentByOfflineUuid($offlineUuid)) {
+            $this->authorizeDocumentView($request, $existing);
+
+            return response()->json($existing, 200);
+        }
+
         $data = $this->validatedDocument($request);
         $relation = DeliveryRelation::findOrFail($data['delivery_relation_id']);
 
@@ -98,7 +106,8 @@ class MedicalDocumentController extends Controller
             return response()->json(['message' => 'Debe detallar la relacion de entrega.'], 422);
         }
 
-        $document = DB::transaction(function () use ($request, $data) {
+        try {
+            $document = DB::transaction(function () use ($request, $data) {
             $worker = Worker::where('dni', $data['worker_dni'])->firstOrFail();
 
             $document = MedicalDocument::create([
@@ -153,7 +162,16 @@ class MedicalDocumentController extends Controller
             }
 
             return $document;
-        });
+            });
+        } catch (QueryException $exception) {
+            if ($offlineUuid && $existing = $this->findDocumentByOfflineUuid($offlineUuid)) {
+                $this->authorizeDocumentView($request, $existing);
+
+                return response()->json($existing, 200);
+            }
+
+            throw $exception;
+        }
 
         return response()->json($document->load(['type', 'worker', 'deliveryRelation', 'files', 'history.user']), 201);
     }
@@ -377,8 +395,22 @@ class MedicalDocumentController extends Controller
             'annexes' => ['nullable', 'array', 'max:4'],
             'annexes.*' => ['file', 'mimes:' . self::ALLOWED_DOCUMENT_MIMES, 'max:' . self::MAX_DOCUMENT_FILE_KB],
             'observation' => ['nullable', 'string'],
-            'offline_uuid' => ['nullable', 'string', 'max:120', 'unique:medical_documents,offline_uuid'],
+            'offline_uuid' => ['nullable', 'string', 'max:120'],
         ]);
+    }
+
+    private function offlineUuidFromRequest(Request $request): ?string
+    {
+        $offlineUuid = trim((string) $request->input('offline_uuid'));
+
+        return $offlineUuid !== '' ? $offlineUuid : null;
+    }
+
+    private function findDocumentByOfflineUuid(string $offlineUuid): ?MedicalDocument
+    {
+        return MedicalDocument::with(['type', 'worker', 'deliveryRelation', 'files', 'history.user'])
+            ->where('offline_uuid', $offlineUuid)
+            ->first();
     }
 
     private function storeUploadedFile(Request $request, MedicalDocument $document, string $field, string $type): void

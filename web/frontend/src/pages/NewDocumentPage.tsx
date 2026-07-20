@@ -32,6 +32,10 @@ const DOCUMENT_ACCEPT = '.pdf,.docx,.jpeg,.jpg,.png,application/pdf,application/
 const IMAGE_ACCEPT = '.jpeg,.jpg,.png,image/jpeg,image/png'
 const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'jpeg', 'jpg', 'png']
 
+function createOfflineUuid() {
+  return globalThis.crypto?.randomUUID?.() ?? `web-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
 function fileExtension(file: File) {
   return file.name.split('.').pop()?.toLowerCase() ?? ''
 }
@@ -107,6 +111,7 @@ export function NewDocumentPage() {
   const [worker, setWorker] = useState<Worker | null>(null)
   const [workerError, setWorkerError] = useState('')
   const [submitError, setSubmitError] = useState('')
+  const pendingOfflineUuidRef = useRef<string | null>(null)
   
   const delivererPhotoRef = useRef<HTMLInputElement | null>(null)
   const medicalFileRef = useRef<HTMLInputElement | null>(null)
@@ -184,6 +189,9 @@ export function NewDocumentPage() {
     mutationFn: async (values: NewDocumentForm) => {
       setSubmitError('')
       const data = new FormData()
+      const offlineUuid = pendingOfflineUuidRef.current ?? createOfflineUuid()
+      pendingOfflineUuidRef.current = offlineUuid
+      data.append('offline_uuid', offlineUuid)
       Object.entries(values).forEach(([key, value]) => {
         if (key !== 'deliverer_photo' && key !== 'medical_document_file' && key !== 'annexes' && value) {
           data.append(key, String(value))
@@ -199,6 +207,7 @@ export function NewDocumentPage() {
       return (await api.post<MedicalDocument>('/medical-documents', data)).data
     },
     onSuccess: async (document) => {
+      pendingOfflineUuidRef.current = null
       await queryClient.invalidateQueries({ queryKey: ['documents'] })
       navigate(`/documents/${document.id}`)
     },

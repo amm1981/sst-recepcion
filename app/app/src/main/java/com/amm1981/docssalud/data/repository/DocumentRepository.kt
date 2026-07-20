@@ -13,11 +13,16 @@ import com.amm1981.docssalud.data.local.dao.SyncQueueDao
 import com.amm1981.docssalud.data.local.entity.SyncQueueEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okio.BufferedSink
+import okio.source
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -79,6 +84,8 @@ class DocumentRepository @Inject constructor(
     private val syncQueueDao: SyncQueueDao,
     private val api: DocsSaludApi
 ) {
+    private val syncMutex = Mutex()
+
     private companion object {
         const val MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024L
         val ALLOWED_EXTENSIONS = setOf("docx", "pdf", "jpeg", "jpg", "png")
@@ -100,8 +107,8 @@ class DocumentRepository @Inject constructor(
         delivererPhotoUri: Uri?,
         medicalDocumentUri: Uri,
         annexUris: List<Uri>
-    ): Result<Unit> {
-        return try {
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
             val offlineUuid = UUID.randomUUID().toString()
             val documentDir = File(context.filesDir, "offline_documents/$offlineUuid").apply { mkdirs() }
             val persistedDelivererPhotoUri = delivererPhotoUri?.let {
@@ -129,48 +136,67 @@ class DocumentRepository @Inject constructor(
                 status = "PENDING"
             )
             syncQueueDao.insert(entity)
-            Result.success(Unit)
+            Result.success(offlineUuid)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
-    suspend fun processSyncQueue() {
+    suspend fun processSyncQueue() = syncMutex.withLock {
         val pendingItems = syncQueueDao.getPending()
         for (item in pendingItems) {
-            try {
-                val response = api.uploadDocument(
-                    offlineUuid = textPart(item.offlineUuid),
-                    medicalDocumentTypeId = textPart(item.medicalDocumentTypeId.toString()),
-                    workerDni = textPart(item.workerDni),
-                    deliveryRelationId = textPart(item.deliveryRelationId.toString()),
-                    deliveryRelationDetail = nullableTextPart(item.deliveryRelationDetail),
-                    delivererName = textPart(item.delivererName),
-                    delivererDocument = nullableTextPart(item.delivererDocument),
-                    contactNumber = textPart(item.contactNumber),
-                    observation = nullableTextPart(item.observation),
-                    delivererPhoto = item.delivererPhotoUri?.let {
-                        uriPart("deliverer_photo", Uri.parse(it), "dni.jpg")
-                    },
-                    medicalDocumentFile = uriPart("medical_document_file", Uri.parse(item.medicalDocumentUri), "documento"),
-                    annexes = item.annexUris
-                        .split("|")
-                        .filter { it.isNotBlank() }
-                        .map { uriPart("annexes[]", Uri.parse(it), "anexo") }
-                )
+            uploadQueueItem(item)
+        }
+    }
 
-                val body = response.body()
-                if (response.isSuccessful && body != null) {
-                    syncQueueDao.markSynced(item.id, body.id)
-                } else {
-                    if (!reconcileKnownRemoteDocument(item.offlineUuid)) {
-                        syncQueueDao.updateStatus(item.id, "FAILED")
-                    }
-                }
-            } catch (e: Exception) {
+    suspend fun syncQueuedDocument(offlineUuid: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            val synced = syncMutex.withLock {
+                val item = syncQueueDao.findByOfflineUuid(offlineUuid) ?: return@withLock false
+                if (item.status == "SYNCED") return@withLock true
+
+                uploadQueueItem(item)
+                syncQueueDao.findByOfflineUuid(offlineUuid)?.status == "SYNCED"
+            }
+            Result.success(synced)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun uploadQueueItem(item: SyncQueueEntity) {
+        try {
+            val response = api.uploadDocument(
+                offlineUuid = textPart(item.offlineUuid),
+                medicalDocumentTypeId = textPart(item.medicalDocumentTypeId.toString()),
+                workerDni = textPart(item.workerDni),
+                deliveryRelationId = textPart(item.deliveryRelationId.toString()),
+                deliveryRelationDetail = nullableTextPart(item.deliveryRelationDetail),
+                delivererName = textPart(item.delivererName),
+                delivererDocument = nullableTextPart(item.delivererDocument),
+                contactNumber = textPart(item.contactNumber),
+                observation = nullableTextPart(item.observation),
+                delivererPhoto = item.delivererPhotoUri?.let {
+                    uriPart("deliverer_photo", Uri.parse(it), "dni.jpg")
+                },
+                medicalDocumentFile = uriPart("medical_document_file", Uri.parse(item.medicalDocumentUri), "documento"),
+                annexes = item.annexUris
+                    .split("|")
+                    .filter { it.isNotBlank() }
+                    .map { uriPart("annexes[]", Uri.parse(it), "anexo") }
+            )
+
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                syncQueueDao.markSynced(item.id, body.id)
+            } else {
                 if (!reconcileKnownRemoteDocument(item.offlineUuid)) {
                     syncQueueDao.updateStatus(item.id, "FAILED")
                 }
+            }
+        } catch (e: Exception) {
+            if (!reconcileKnownRemoteDocument(item.offlineUuid)) {
+                syncQueueDao.updateStatus(item.id, "FAILED")
             }
         }
     }
@@ -421,10 +447,18 @@ class DocumentRepository @Inject constructor(
     private fun uriPart(fieldName: String, uri: Uri, fallbackName: String): MultipartBody.Part {
         val resolver = context.contentResolver
         val mimeType = resolver.getType(uri) ?: "application/octet-stream"
-        val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: throw IllegalArgumentException("No se pudo leer el archivo seleccionado")
         val fileName = displayName(uri, fallbackName)
-        val body = bytes.toRequestBody(mimeType.toMediaTypeOrNull())
+        val body = object : RequestBody() {
+            override fun contentType() = mimeType.toMediaTypeOrNull()
+
+            override fun contentLength(): Long = fileSize(uri) ?: -1L
+
+            override fun writeTo(sink: BufferedSink) {
+                openInputStream(uri)?.use { input ->
+                    sink.writeAll(input.source())
+                } ?: throw IOException("No se pudo leer el archivo seleccionado")
+            }
+        }
         return MultipartBody.Part.createFormData(fieldName, fileName, body)
     }
 

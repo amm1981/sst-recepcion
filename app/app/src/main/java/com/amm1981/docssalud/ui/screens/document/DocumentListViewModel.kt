@@ -108,6 +108,8 @@ class DocumentListViewModel @Inject constructor(
     }
 
     fun sendPendingDocuments(currentStatus: String) {
+        if (_state.value.isUploading) return
+
         viewModelScope.launch {
             val pending = documentRepository.pendingUploadCount()
             if (pending == 0) {
