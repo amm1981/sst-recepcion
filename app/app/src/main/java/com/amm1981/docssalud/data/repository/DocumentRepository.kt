@@ -82,6 +82,8 @@ class DocumentRepository @Inject constructor(
     private companion object {
         const val MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024L
         val ALLOWED_EXTENSIONS = setOf("docx", "pdf", "jpeg", "jpg", "png")
+        val IMAGE_EXTENSIONS = setOf("jpeg", "jpg", "png")
+        val DOCUMENT_JPEG_QUALITIES = intArrayOf(94, 92, 90, 88)
     }
 
     suspend fun enqueueDocument(
@@ -449,18 +451,25 @@ class DocumentRepository @Inject constructor(
 
     private fun persistOfflineFile(uri: Uri, targetDir: File, fallbackName: String): Uri {
         val originalName = displayName(uri, fallbackName)
-        validateSelectedFile(uri, originalName)
+        validateSelectedExtension(originalName)
         val mimeType = context.contentResolver.getType(uri).orEmpty()
-        val isImage = mimeType.startsWith("image/") || extension(originalName) in setOf("jpeg", "jpg", "png")
-        val targetName = if (isImage && extension(originalName) != "png") {
+        val isImage = mimeType.startsWith("image/") || extension(originalName) in IMAGE_EXTENSIONS
+        val originalSize = fileSize(uri)
+        val shouldCompressImage = isImage && (originalSize == null || originalSize > MAX_FILE_SIZE_BYTES)
+        val targetName = if (shouldCompressImage) {
             originalName.replace(Regex("\\.[^.]+$"), ".jpg").ifBlank { "$fallbackName.jpg" }
         } else {
             originalName.ifBlank { fallbackName }
         }
         val targetFile = uniqueFile(targetDir, targetName)
 
-        if (isImage && compressImageToFile(uri, targetFile, mimeType)) {
+        if (shouldCompressImage && compressImageToFile(uri, targetFile)) {
+            validatePersistedSize(targetFile)
             return Uri.fromFile(targetFile)
+        }
+
+        if (!isImage && originalSize?.let { it > MAX_FILE_SIZE_BYTES } == true) {
+            throw IllegalArgumentException("El tamano maximo por archivo es 10MB.")
         }
 
         val inputStream = if (uri.scheme == "file") {
@@ -471,32 +480,58 @@ class DocumentRepository @Inject constructor(
         inputStream?.use { input ->
             FileOutputStream(targetFile).use { output -> input.copyTo(output) }
         } ?: throw IllegalArgumentException("No se pudo leer el archivo seleccionado")
+        validatePersistedSize(targetFile)
         return Uri.fromFile(targetFile)
     }
 
-    private fun validateSelectedFile(uri: Uri, fileName: String) {
+    private fun validateSelectedExtension(fileName: String) {
         val ext = extension(fileName)
         if (ext !in ALLOWED_EXTENSIONS) {
             throw IllegalArgumentException("Formato no permitido. Use DOCX, PDF, JPEG, JPG o PNG.")
         }
-        val size = fileSize(uri)
-        if (size != null && size > MAX_FILE_SIZE_BYTES) {
+    }
+
+    private fun validatePersistedSize(file: File) {
+        if (file.length() > MAX_FILE_SIZE_BYTES) {
             throw IllegalArgumentException("El tamano maximo por archivo es 10MB.")
         }
     }
 
-    private fun compressImageToFile(uri: Uri, targetFile: File, mimeType: String): Boolean {
+    private fun compressImageToFile(uri: Uri, targetFile: File): Boolean {
+        val originalSize = fileSize(uri)
+        if (originalSize != null && originalSize <= MAX_FILE_SIZE_BYTES) {
+            return false
+        }
+
         val bitmap = openInputStream(uri)?.use { BitmapFactory.decodeStream(it) } ?: return false
+        var smallestFile: File? = null
         return try {
-            FileOutputStream(targetFile).use { output ->
-                if (mimeType == "image/png" || targetFile.extension.equals("png", ignoreCase = true)) {
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+            for (quality in DOCUMENT_JPEG_QUALITIES) {
+                val candidate = File(targetFile.parentFile, "${targetFile.nameWithoutExtension}_q$quality.jpg")
+                FileOutputStream(candidate).use { output ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, quality, output)
+                }
+
+                if (smallestFile == null || candidate.length() < (smallestFile?.length() ?: Long.MAX_VALUE)) {
+                    smallestFile?.delete()
+                    smallestFile = candidate
                 } else {
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 88, output)
+                    candidate.delete()
+                }
+
+                if ((smallestFile?.length() ?: Long.MAX_VALUE) <= MAX_FILE_SIZE_BYTES) {
+                    smallestFile?.copyTo(targetFile, overwrite = true)
+                    smallestFile?.delete()
+                    return true
                 }
             }
+
+            smallestFile?.copyTo(targetFile, overwrite = true)
+            smallestFile?.delete()
+            true
         } finally {
             bitmap.recycle()
+            smallestFile?.delete()
         }
     }
 

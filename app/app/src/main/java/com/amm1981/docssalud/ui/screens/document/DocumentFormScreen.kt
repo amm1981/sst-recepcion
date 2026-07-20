@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,11 +32,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.amm1981.docssalud.data.local.entity.CatalogEntity
 import com.amm1981.docssalud.ui.theme.PrimaryGreen
 import java.io.File
-import java.io.FileOutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +59,7 @@ fun DocumentFormScreen(
     var medicalDocumentUri by remember { mutableStateOf<Uri?>(null) }
     var annexUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
     var cameraTarget by remember { mutableStateOf<PhotoTarget?>(null) }
+    var cameraOutputUri by remember { mutableStateOf<Uri?>(null) }
     var pendingCameraTarget by remember { mutableStateOf<PhotoTarget?>(null) }
     var localError by remember { mutableStateOf<String?>(null) }
     val selectedRelation = state.deliveryRelations.firstOrNull { it.id == selectedRelationId }
@@ -81,23 +81,32 @@ fun DocumentFormScreen(
         it.forEach(context::persistReadPermission)
         annexUris = (annexUris + it).distinct().take(4)
     }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
-        val uri = bitmap?.toCacheUri(context, "captura_${System.currentTimeMillis()}.jpg")
-        if (uri != null) {
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        val uri = cameraOutputUri
+        if (success && uri != null) {
             when (cameraTarget) {
                 PhotoTarget.Dni -> delivererPhotoUri = uri
                 PhotoTarget.Document -> medicalDocumentUri = uri
                 null -> Unit
             }
+        } else {
+            uri?.deleteCacheFile(context)
         }
         cameraTarget = null
+        cameraOutputUri = null
     }
     val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         val target = pendingCameraTarget
         pendingCameraTarget = null
         if (granted && target != null) {
-            cameraTarget = target
-            cameraLauncher.launch(null)
+            val uri = context.createCameraImageUri()
+            if (uri != null) {
+                cameraTarget = target
+                cameraOutputUri = uri
+                cameraLauncher.launch(uri)
+            } else {
+                localError = "No se pudo preparar la camara."
+            }
         } else {
             localError = "Permiso de cámara denegado."
         }
@@ -106,8 +115,14 @@ fun DocumentFormScreen(
     fun openCamera(target: PhotoTarget) {
         localError = null
         if (context.hasCameraPermission()) {
-            cameraTarget = target
-            cameraLauncher.launch(null)
+            val uri = context.createCameraImageUri()
+            if (uri != null) {
+                cameraTarget = target
+                cameraOutputUri = uri
+                cameraLauncher.launch(uri)
+            } else {
+                localError = "No se pudo preparar la camara."
+            }
         } else {
             pendingCameraTarget = target
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
@@ -472,12 +487,22 @@ private fun Context.hasCameraPermission(): Boolean {
     return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 }
 
-private fun Bitmap.toCacheUri(context: Context, fileName: String): Uri {
-    val file = File(context.cacheDir, fileName)
-    FileOutputStream(file).use { out ->
-        compress(Bitmap.CompressFormat.JPEG, 90, out)
+private fun Context.createCameraImageUri(): Uri? {
+    return try {
+        val directory = File(cacheDir, "camera").apply { mkdirs() }
+        val file = File(directory, "captura_${System.currentTimeMillis()}.jpg")
+        FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+    } catch (_: IllegalArgumentException) {
+        null
     }
-    return Uri.fromFile(file)
+}
+
+private fun Uri.deleteCacheFile(context: Context) {
+    if (scheme == "content" && authority == "${context.packageName}.fileprovider") {
+        path?.substringAfterLast('/')?.takeIf { it.isNotBlank() }?.let { fileName ->
+            File(context.cacheDir, "camera/$fileName").delete()
+        }
+    }
 }
 
 private fun documentMimeTypes(): Array<String> = arrayOf(

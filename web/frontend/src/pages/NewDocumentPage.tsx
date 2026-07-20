@@ -25,6 +25,9 @@ const schema = z.object({
 type NewDocumentForm = z.infer<typeof schema>
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024
+const DOCUMENT_IMAGE_MAX_SIDE = 3600
+const DOCUMENT_IMAGE_FALLBACK_SIDES = [3200, 2800, 2400]
+const DOCUMENT_IMAGE_QUALITIES = [0.94, 0.92, 0.9, 0.86]
 const DOCUMENT_ACCEPT = '.pdf,.docx,.jpeg,.jpg,.png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png'
 const IMAGE_ACCEPT = '.jpeg,.jpg,.png,image/jpeg,image/png'
 const ALLOWED_EXTENSIONS = ['pdf', 'docx', 'jpeg', 'jpg', 'png']
@@ -45,21 +48,48 @@ function validateDocumentFile(file: File) {
 async function compressImageFile(file: File): Promise<File> {
   if (!file.type.startsWith('image/')) return file
   const bitmap = await createImageBitmap(file)
-  const maxSide = 1800
-  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
-  const width = Math.max(1, Math.round(bitmap.width * scale))
-  const height = Math.max(1, Math.round(bitmap.height * scale))
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  const context = canvas.getContext('2d')
-  if (!context) return file
-  context.drawImage(bitmap, 0, 0, width, height)
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.78))
-  bitmap.close()
-  if (!blob || blob.size >= file.size) return file
+  const maxOriginalSide = Math.max(bitmap.width, bitmap.height)
+  const sides = [DOCUMENT_IMAGE_MAX_SIDE, ...DOCUMENT_IMAGE_FALLBACK_SIDES]
+    .filter((side, index) => side <= maxOriginalSide || index === 0)
+    .filter((side, index, allSides) => allSides.indexOf(side) === index)
   const compressedName = file.name.replace(/\.[^.]+$/, '.jpg')
-  return new File([blob], compressedName, { type: 'image/jpeg', lastModified: Date.now() })
+  let bestBlob: Blob | null = null
+
+  try {
+    for (const maxSide of sides) {
+      const scale = Math.min(1, maxSide / maxOriginalSide)
+      const width = Math.max(1, Math.round(bitmap.width * scale))
+      const height = Math.max(1, Math.round(bitmap.height * scale))
+      const canvas = document.createElement('canvas')
+      canvas.width = width
+      canvas.height = height
+      const context = canvas.getContext('2d', { alpha: false })
+      if (!context) continue
+      context.imageSmoothingEnabled = true
+      context.imageSmoothingQuality = 'high'
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, width, height)
+      context.drawImage(bitmap, 0, 0, width, height)
+
+      for (const quality of DOCUMENT_IMAGE_QUALITIES) {
+        const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
+        if (!blob) continue
+        if (!bestBlob || blob.size < bestBlob.size) bestBlob = blob
+        if (blob.size <= MAX_FILE_SIZE && blob.size < file.size * 0.98) {
+          return new File([blob], compressedName, { type: 'image/jpeg', lastModified: Date.now() })
+        }
+      }
+    }
+  } finally {
+    bitmap.close()
+  }
+
+  if (file.size <= MAX_FILE_SIZE) return file
+  if (bestBlob && bestBlob.size <= MAX_FILE_SIZE) {
+    return new File([bestBlob], compressedName, { type: 'image/jpeg', lastModified: Date.now() })
+  }
+
+  return file
 }
 
 async function prepareDocumentFile(file: File) {

@@ -451,13 +451,14 @@ class MedicalDocumentController extends Controller
             imagesavealpha($image, true);
             $stored = imagepng($image, $target, 5);
         } else {
-            $stored = imagejpeg($image, $target, 88);
+            $stored = imagejpeg($image, $target, 94);
             $mimeType = 'image/jpeg';
             $name = preg_replace('/\.[^.]+$/', '.jpg', $name) ?: ($name . '.jpg');
         }
         imagedestroy($image);
 
-        if (! $stored) {
+        $targetSize = $stored ? (filesize($target) ?: 0) : 0;
+        if (! $stored || $targetSize <= 0 || $targetSize >= $file->getSize()) {
             @unlink($target);
             return [
                 'path' => $path,
@@ -472,7 +473,7 @@ class MedicalDocumentController extends Controller
             'path' => $target,
             'name' => $name,
             'mime_type' => $mimeType,
-            'size' => filesize($target) ?: $file->getSize(),
+            'size' => $targetSize,
             'temporary' => true,
         ];
     }
