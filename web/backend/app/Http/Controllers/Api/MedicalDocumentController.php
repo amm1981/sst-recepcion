@@ -30,14 +30,16 @@ class MedicalDocumentController extends Controller
         $query = MedicalDocument::with(['type', 'worker.management', 'worker.sector', 'deliveryRelation', 'creator', 'files'])
             ->latest();
 
-        // Only ADMIN and SST can see all documents; everyone else sees only their own
+        // Only ADMIN, ADMIN_SST and SST can see all documents; everyone else sees only their own
         $user = $request->user();
-        if (! $user->hasRole('ADMIN') && ! $user->hasRole('SST')) {
+        if (! $user->hasRole('ADMIN', 'ADMIN_SST', 'SST')) {
             $query->where('created_by', $user->id);
         }
 
         if ($request->filled('status')) {
             $query->where('status', $request->string('status'));
+        } else {
+            $query->where('status', '!=', MedicalDocument::STATUS_ANNULLED);
         }
 
         if ($request->filled('date_from')) {
@@ -72,7 +74,7 @@ class MedicalDocumentController extends Controller
         $query = MedicalDocument::query();
 
         $user = $request->user();
-        if (! $user->hasRole('ADMIN') && ! $user->hasRole('SST')) {
+        if (! $user->hasRole('ADMIN', 'ADMIN_SST', 'SST')) {
             $query->where('created_by', $user->id);
         }
 
@@ -81,6 +83,7 @@ class MedicalDocumentController extends Controller
             'received' => (clone $query)->where('status', self::STATUS_RECEIVED_LABEL)->count(),
             'registered' => (clone $query)->where('status', self::STATUS_REGISTERED_LABEL)->count(),
             'rejected' => (clone $query)->where('status', self::STATUS_REJECTED_LABEL)->count(),
+            'annulled' => (clone $query)->where('status', MedicalDocument::STATUS_ANNULLED)->count(),
         ]);
     }
 
@@ -144,9 +147,9 @@ class MedicalDocumentController extends Controller
 
             $this->audit($request, 'created', 'medical_documents', $document->id);
 
-            // Dispatch notification to ADMIN and SST
+            // Dispatch notification to ADMIN, ADMIN_SST and SST
             $notifyUsers = \App\Models\User::whereHas('role', function ($query) {
-                $query->whereIn('code', ['ADMIN', 'SST']);
+                $query->whereIn('code', ['ADMIN', 'ADMIN_SST', 'SST']);
             })->get();
 
             $notifications = [];
@@ -197,7 +200,7 @@ class MedicalDocumentController extends Controller
 
     public function update(Request $request, MedicalDocument $medicalDocument)
     {
-        abort_unless($request->user()->hasRole('ADMIN'), 403);
+        abort_unless($request->user()->hasRole('ADMIN', 'ADMIN_SST'), 403);
 
         $data = $request->validate([
             'observation' => ['nullable', 'string'],
@@ -215,7 +218,7 @@ class MedicalDocumentController extends Controller
 
     public function updateObservation(Request $request, MedicalDocument $medicalDocument)
     {
-        abort_unless($request->user()->hasRole('ADMIN'), 403);
+        abort_unless($request->user()->hasRole('ADMIN', 'ADMIN_SST'), 403);
 
         $data = $request->validate([
             'observation' => ['nullable', 'string'],
@@ -242,13 +245,33 @@ class MedicalDocumentController extends Controller
 
     public function destroy(Request $request, MedicalDocument $medicalDocument)
     {
-        abort_unless($request->user()->hasRole('ADMIN'), 403);
+        abort_unless($request->user()->canDo('documents.annul'), 403);
 
-        $medicalDocument->delete();
-        $this->audit($request, 'deleted', 'medical_documents', $medicalDocument->id);
-        $this->resendRejectedReportIfNeeded($medicalDocument);
+        if ($medicalDocument->status !== MedicalDocument::STATUS_ANNULLED) {
+            DB::transaction(function () use ($request, $medicalDocument) {
+                $from = $medicalDocument->status;
+                $medicalDocument->update([
+                    'status' => MedicalDocument::STATUS_ANNULLED,
+                    'status_changed_by' => $request->user()->id,
+                    'status_changed_at' => now(),
+                ]);
 
-        return response()->json(['message' => 'Documento eliminado.']);
+                MedicalDocumentStatusHistory::create([
+                    'medical_document_id' => $medicalDocument->id,
+                    'from_status' => $from,
+                    'to_status' => MedicalDocument::STATUS_ANNULLED,
+                    'observation' => 'Documento anulado.',
+                    'changed_by' => $request->user()->id,
+                ]);
+
+                $this->audit($request, 'annulled', 'medical_documents', $medicalDocument->id, [
+                    'from' => $from,
+                    'to' => MedicalDocument::STATUS_ANNULLED,
+                ]);
+            });
+        }
+
+        return response()->json($medicalDocument->fresh(['type', 'worker', 'deliveryRelation', 'files', 'history.user']));
     }
 
     public function changeStatus(Request $request, MedicalDocument $medicalDocument)
@@ -304,7 +327,11 @@ class MedicalDocumentController extends Controller
 
     private function allowedStatusTransitions(Request $request, MedicalDocument $document): array
     {
-        if ($request->user()->canDo('admin.manage')) {
+        if ($document->status === MedicalDocument::STATUS_ANNULLED) {
+            return [];
+        }
+
+        if ($request->user()->canDo('admin.manage') || $request->user()->canDo('documents.annul')) {
             return collect([
                 MedicalDocument::STATUS_PENDING,
                 MedicalDocument::STATUS_RECEIVED,
@@ -318,6 +345,7 @@ class MedicalDocumentController extends Controller
             MedicalDocument::STATUS_RECEIVED => [MedicalDocument::STATUS_REGISTERED, MedicalDocument::STATUS_REJECTED],
             MedicalDocument::STATUS_REGISTERED => [],
             MedicalDocument::STATUS_REJECTED => [],
+            MedicalDocument::STATUS_ANNULLED => [],
         ][$document->status] ?? [];
     }
 
@@ -602,7 +630,7 @@ class MedicalDocumentController extends Controller
     private function authorizeDocumentView(Request $request, MedicalDocument $document): void
     {
         $user = $request->user();
-        if (! $user->hasRole('ADMIN') && ! $user->hasRole('SST') && $document->created_by !== $user->id) {
+        if (! $user->hasRole('ADMIN', 'ADMIN_SST', 'SST') && $document->created_by !== $user->id) {
             abort(403, 'No puede ver documentos creados por otros usuarios.');
         }
     }

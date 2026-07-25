@@ -14,6 +14,7 @@ class MedicalDocument extends Model
     public const STATUS_RECEIVED = 'RECEPCIONADO';
     public const STATUS_REGISTERED = 'REGISTRADO';
     public const STATUS_REJECTED = 'RECHAZADO';
+    public const STATUS_ANNULLED = 'ANULADO';
 
     protected $fillable = [
         'medical_document_type_id',

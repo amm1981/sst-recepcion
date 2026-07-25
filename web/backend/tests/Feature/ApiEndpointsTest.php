@@ -186,6 +186,41 @@ class ApiEndpointsTest extends TestCase
         ]);
     }
 
+    public function test_admin_sst_can_annul_document_without_deleting_it(): void
+    {
+        $admin = $this->adminUser();
+        $role = Role::where('code', 'ADMIN_SST')->firstOrFail();
+        $user = User::factory()->create(['role_id' => $role->id]);
+        $document = MedicalDocument::create($this->documentFixtures($admin) + [
+            'status' => MedicalDocument::STATUS_REGISTERED,
+        ]);
+        Sanctum::actingAs($user);
+
+        $this->assertTrue($user->canDo('documents.annul'));
+        $this->assertTrue($user->canDo('documents.updateStatus'));
+        $this->assertFalse($user->canDo('admin.manage'));
+
+        $this->deleteJson("/api/medical-documents/{$document->id}")
+            ->assertOk()
+            ->assertJsonPath('status', MedicalDocument::STATUS_ANNULLED);
+
+        $this->assertDatabaseHas('medical_documents', [
+            'id' => $document->id,
+            'status' => MedicalDocument::STATUS_ANNULLED,
+            'deleted_at' => null,
+        ]);
+        $this->assertDatabaseHas('medical_document_status_history', [
+            'medical_document_id' => $document->id,
+            'from_status' => MedicalDocument::STATUS_REGISTERED,
+            'to_status' => MedicalDocument::STATUS_ANNULLED,
+        ]);
+
+        $this->getJson('/api/medical-documents/counts')
+            ->assertOk()
+            ->assertJsonPath('registered', 0)
+            ->assertJsonPath('annulled', 1);
+    }
+
     public function test_report_summary_applies_status_and_type_filters(): void
     {
         $user = $this->adminUser();

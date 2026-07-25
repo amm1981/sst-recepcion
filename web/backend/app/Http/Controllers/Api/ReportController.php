@@ -39,9 +39,11 @@ class ReportController extends Controller
             $q->where('medical_documents.medical_document_type_id', $request->type_id);
         });
 
-        $query->when($request->filled('status'), function ($q) use ($request) {
-            $q->where('medical_documents.status', $request->status);
-        });
+        if ($request->filled('status')) {
+            $query->where('medical_documents.status', $request->status);
+        } else {
+            $query->where('medical_documents.status', '!=', MedicalDocument::STATUS_ANNULLED);
+        }
 
         if ($request->filled('management_id') || $request->filled('sector_id')) {
             $query->whereHas('worker', function ($q) use ($request) {
@@ -87,7 +89,7 @@ class ReportController extends Controller
     {
         $user = $request->user();
 
-        if (! $user->hasRole('ADMIN') && ! $user->hasRole('SST')) {
+        if (! $user->hasRole('ADMIN', 'ADMIN_SST', 'SST')) {
             $query->where('medical_documents.created_by', $user->id);
         }
     }

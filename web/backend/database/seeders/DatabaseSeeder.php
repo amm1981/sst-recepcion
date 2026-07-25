@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
             ['name' => 'Ver documentos', 'code' => 'documents.view'],
             ['name' => 'Crear documentos', 'code' => 'documents.create'],
             ['name' => 'Cambiar estado de documentos', 'code' => 'documents.updateStatus'],
+            ['name' => 'Anular documentos', 'code' => 'documents.annul'],
             ['name' => 'Gestionar trabajadores', 'code' => 'workers.manage'],
             ['name' => 'Ver reportes', 'code' => 'reports.view'],
             ['name' => 'Administrar sistema', 'code' => 'admin.manage'],
@@ -33,6 +34,7 @@ class DatabaseSeeder extends Seeder
 
         $roles = [
             'ADMIN' => ['name' => 'Administrador', 'description' => 'Gestion total del sistema.', 'permissions' => $permissions->pluck('id')->all()],
+            'ADMIN_SST' => ['name' => 'Administrador SST', 'description' => 'Gestion operativa SST sin acceso al modulo de administracion.', 'permissions' => $permissions->whereIn('code', ['documents.view', 'documents.create', 'documents.updateStatus', 'documents.annul', 'workers.manage', 'reports.view'])->pluck('id')->all()],
             'RRHH' => ['name' => 'Recursos Humanos', 'description' => 'Registro y consulta de sus documentos.', 'permissions' => $permissions->whereIn('code', ['documents.view', 'documents.create', 'reports.view'])->pluck('id')->all()],
             'SST' => ['name' => 'Seguridad y Salud en el Trabajo', 'description' => 'Registro, consulta y cambio de estado.', 'permissions' => $permissions->whereIn('code', ['documents.view', 'documents.create', 'documents.updateStatus', 'workers.manage', 'reports.view'])->pluck('id')->all()],
         ];

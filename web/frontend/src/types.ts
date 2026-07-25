@@ -1,14 +1,15 @@
-export type RoleCode = 'ADMIN' | 'RRHH' | 'SST'
+export type RoleCode = 'ADMIN' | 'ADMIN_SST' | 'RRHH' | 'SST'
 
 export type PermissionCode =
   | 'documents.view'
   | 'documents.create'
   | 'documents.updateStatus'
+  | 'documents.annul'
   | 'workers.manage'
   | 'reports.view'
   | 'admin.manage'
 
-export type Status = 'PENDIENTE' | 'RECEPCIONADO' | 'REGISTRADO' | 'RECHAZADO'
+export type Status = 'PENDIENTE' | 'RECEPCIONADO' | 'REGISTRADO' | 'RECHAZADO' | 'ANULADO'
 
 export type Role = {
   id: number
@@ -81,6 +82,7 @@ export type DocumentCounts = {
   received: number
   registered: number
   rejected: number
+  annulled: number
 }
 
 export type Management = {

@@ -18,7 +18,7 @@ export function DashboardPage() {
   })
 
   const rows = documents.data?.data ?? []
-  const counts = countsQuery.data ?? { pending: 0, received: 0, registered: 0, rejected: 0 }
+  const counts = countsQuery.data ?? { pending: 0, received: 0, registered: 0, rejected: 0, annulled: 0 }
 
   return (
     <div>

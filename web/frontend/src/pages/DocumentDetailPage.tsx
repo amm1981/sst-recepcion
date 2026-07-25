@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, Eye, RefreshCw, X, FileText, Pencil, Trash2 } from 'lucide-react'
+import { Download, Eye, RefreshCw, X, FileText, Pencil, Ban } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api, getErrorMessage } from '../api/client'
@@ -8,11 +8,13 @@ import { Modal } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import type { MedicalDocument, MedicalDocumentFile, Status } from '../types'
 
-const ALL_STATUSES: Status[] = ['PENDIENTE', 'RECEPCIONADO', 'REGISTRADO', 'RECHAZADO']
+const ACTIVE_STATUSES: Status[] = ['PENDIENTE', 'RECEPCIONADO', 'REGISTRADO', 'RECHAZADO']
 
 function allowedStatusTransitions(current: Status, isAdmin: boolean): Status[] {
+  if (current === 'ANULADO') return []
+
   if (isAdmin) {
-    return ALL_STATUSES.filter((item) => item !== current)
+    return ACTIVE_STATUSES.filter((item) => item !== current)
   }
 
   return current === 'PENDIENTE'
@@ -39,7 +41,7 @@ export function DocumentDetailPage() {
   const navigate = useNavigate()
   const [statusOpen, setStatusOpen] = useState(false)
   const [observationOpen, setObservationOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [annulOpen, setAnnulOpen] = useState(false)
   const [previewFile, setPreviewFile] = useState<MedicalDocumentFile | null>(null)
   const document = useQuery({
     queryKey: ['document', id],
@@ -51,8 +53,9 @@ export function DocumentDetailPage() {
   if (!document.data) return <div>No encontrado</div>
 
   const data = document.data
-  const isAdmin = user?.role?.code === 'ADMIN'
+  const isAdmin = user?.role?.code === 'ADMIN' || user?.role?.code === 'ADMIN_SST'
   const canChangeStatus = can('documents.updateStatus') && allowedStatusTransitions(data.status, isAdmin).length > 0
+  const canAnnul = can('documents.annul') && data.status !== 'ANULADO'
 
   async function downloadFile(fileId: number, fileName: string) {
     const response = await api.get(`/medical-documents/files/${fileId}/download`, { responseType: 'blob' })
@@ -89,10 +92,10 @@ export function DocumentDetailPage() {
               Cambiar estado
             </button>
           ) : null}
-          {isAdmin ? (
-            <button className="btn danger" type="button" onClick={() => setDeleteOpen(true)}>
-              <Trash2 size={18} />
-              Eliminar
+          {canAnnul ? (
+            <button className="btn danger" type="button" onClick={() => setAnnulOpen(true)}>
+              <Ban size={18} />
+              Anular
             </button>
           ) : null}
         </div>
@@ -175,7 +178,7 @@ export function DocumentDetailPage() {
       ) : null}
       {statusOpen ? <DetailStatusModal document={data} onClose={() => setStatusOpen(false)} /> : null}
       {observationOpen ? <ObservationModal document={data} onClose={() => setObservationOpen(false)} /> : null}
-      {deleteOpen ? <DeleteDocumentModal document={data} onClose={() => setDeleteOpen(false)} onDeleted={() => navigate('/documents')} /> : null}
+      {annulOpen ? <AnnulDocumentModal document={data} onClose={() => setAnnulOpen(false)} onAnnulled={() => navigate('/documents?status=ANULADO')} /> : null}
     </div>
   )
 }
@@ -357,7 +360,7 @@ function FilePreviewModal({
 function DetailStatusModal({ document, onClose }: { document: MedicalDocument; onClose: () => void }) {
   const queryClient = useQueryClient()
   const { user } = useAuth()
-  const isAdmin = user?.role?.code === 'ADMIN'
+  const isAdmin = user?.role?.code === 'ADMIN' || user?.role?.code === 'ADMIN_SST'
   const [status, setStatus] = useState<Status | ''>('')
   const [observation, setObservation] = useState('')
   const [error, setError] = useState('')
@@ -368,6 +371,7 @@ function DetailStatusModal({ document, onClose }: { document: MedicalDocument; o
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['document', String(document.id)] }),
         queryClient.invalidateQueries({ queryKey: ['documents'] }),
+        queryClient.invalidateQueries({ queryKey: ['medical-documents', 'counts'] }),
       ])
       onClose()
     },
@@ -432,14 +436,14 @@ function ObservationModal({ document, onClose }: { document: MedicalDocument; on
   )
 }
 
-function DeleteDocumentModal({
+function AnnulDocumentModal({
   document,
   onClose,
-  onDeleted,
+  onAnnulled,
 }: {
   document: MedicalDocument
   onClose: () => void
-  onDeleted: () => void
+  onAnnulled: () => void
 }) {
   const queryClient = useQueryClient()
   const [error, setError] = useState('')
@@ -447,20 +451,22 @@ function DeleteDocumentModal({
     mutationFn: async () => api.delete(`/medical-documents/${document.id}`),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['documents'] })
-      onDeleted()
+      await queryClient.invalidateQueries({ queryKey: ['document', String(document.id)] })
+      await queryClient.invalidateQueries({ queryKey: ['medical-documents', 'counts'] })
+      onAnnulled()
     },
     onError: (mutationError) => setError(getErrorMessage(mutationError)),
   })
 
   return (
-    <Modal title={`Eliminar documento #${document.id}`} onClose={onClose}>
+    <Modal title={`Anular documento #${document.id}`} onClose={onClose}>
       <div className="grid">
-        <p className="muted-text">Esta accion eliminara el registro del documento. Los maestros no seran modificados.</p>
+        <p className="muted-text">Esta accion marcara el documento como ANULADO. El registro y sus archivos se conservaran para trazabilidad.</p>
         {error ? <div className="error">{error}</div> : null}
         <div className="header-actions" style={{ justifyContent: 'flex-end' }}>
           <button className="btn secondary" type="button" onClick={onClose}>Cancelar</button>
           <button className="btn danger" type="button" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
-            Eliminar
+            Anular
           </button>
         </div>
       </div>

@@ -11,7 +11,8 @@ import {
   Settings,
   UserRound,
   UsersRound,
-  Menu
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
@@ -32,7 +33,8 @@ const navItems = [
 export function AppLayout() {
   const { user, can, logout } = useAuth()
   const navigate = useNavigate()
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(true)
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
@@ -80,6 +82,8 @@ export function AppLayout() {
   })
 
   const unreadCount = notifications.filter(n => !n.read_at).length
+  const isDesktop = () => window.matchMedia('(min-width: 961px)').matches
+  const effectiveCollapsed = isCollapsed && !isSidebarHovered
 
   async function handleLogout() {
     await logout()
@@ -87,11 +91,15 @@ export function AppLayout() {
   }
 
   return (
-    <div className={`app-shell ${isCollapsed ? 'sidebar-collapsed' : ''} ${isMobileSidebarOpen ? 'mobile-sidebar-open' : ''}`}>
+    <div className={`app-shell ${effectiveCollapsed ? 'sidebar-collapsed' : ''} ${isMobileSidebarOpen ? 'mobile-sidebar-open' : ''}`}>
       {isMobileSidebarOpen ? <button className="sidebar-backdrop" type="button" aria-label="Cerrar menu" onClick={() => setIsMobileSidebarOpen(false)} /> : null}
-      <aside className="sidebar">
+      <aside
+        className="sidebar"
+        onMouseEnter={() => { if (isDesktop()) setIsSidebarHovered(true) }}
+        onMouseLeave={() => setIsSidebarHovered(false)}
+      >
         <div className="brand" style={{ display: 'flex', justifyContent: 'center' }}>
-          {isCollapsed ? (
+          {effectiveCollapsed ? (
             <img src="/icono_docssalud.png" alt="DocsSalud Icono" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
           ) : (
             <img src="/logotipo_docssalud.png" alt="DocsSalud Logotipo" style={{ height: '58px', objectFit: 'contain' }} />
@@ -101,7 +109,7 @@ export function AppLayout() {
           {navItems
             .filter((item) => !item.permission || can(item.permission))
             .map((item) => (
-              <NavLink className="nav-link" key={item.to} to={item.to} title={isCollapsed ? item.label : undefined} onClick={() => setIsMobileSidebarOpen(false)}>
+              <NavLink className="nav-link" key={item.to} to={item.to} title={effectiveCollapsed ? item.label : undefined} onClick={() => setIsMobileSidebarOpen(false)}>
                 <item.icon size={20} strokeWidth={2.5} />
                 <span>{item.label}</span>
               </NavLink>
@@ -120,8 +128,9 @@ export function AppLayout() {
                   setIsCollapsed(!isCollapsed)
                 }
               }}
+              title={isCollapsed ? 'Expandir menu' : 'Contraer menu'}
             >
-              <Menu size={20} />
+              {isCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
             </button>
           </div>
           <div className="header-actions">

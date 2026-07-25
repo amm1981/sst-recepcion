@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Calendar, FileSpreadsheet, Upload, RefreshCw, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api, getErrorMessage } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { DataTable } from '../components/DataTable'
@@ -10,7 +10,7 @@ import { Modal } from '../components/Modal'
 import { SearchBar } from '../components/SearchBar'
 import { StatusBadge } from '../components/StatusBadge'
 import { FilterSelect } from '../components/FilterSelect'
-import type { MedicalDocument, Paginated, RegistrarSummary, Status } from '../types'
+import type { DocumentCounts, MedicalDocument, Paginated, RegistrarSummary, Status } from '../types'
 
 const QUICK_DATE_RANGES = [
   { label: 'Ultimos 7 dias', days: 7 },
@@ -18,11 +18,13 @@ const QUICK_DATE_RANGES = [
   { label: 'Ultimos 45 dias', days: 45 },
 ]
 
-const ALL_STATUSES: Status[] = ['PENDIENTE', 'RECEPCIONADO', 'REGISTRADO', 'RECHAZADO']
+const ACTIVE_STATUSES: Status[] = ['PENDIENTE', 'RECEPCIONADO', 'REGISTRADO', 'RECHAZADO']
 
 function allowedStatusTransitions(current: Status, isAdmin: boolean): Status[] {
+  if (current === 'ANULADO') return []
+
   if (isAdmin) {
-    return ALL_STATUSES.filter((item) => item !== current)
+    return ACTIVE_STATUSES.filter((item) => item !== current)
   }
 
   return current === 'PENDIENTE'
@@ -48,7 +50,9 @@ function quickDateRange(days: number) {
 
 export function DocumentsPage() {
   const { can, user } = useAuth()
-  const [status, setStatus] = useState<Status | 'TODOS'>('PENDIENTE')
+  const [searchParams] = useSearchParams()
+  const initialStatus = searchParams.get('status') === 'ANULADO' ? 'ANULADO' : 'PENDIENTE'
+  const [status, setStatus] = useState<Status | 'TODOS'>(initialStatus)
   const [q, setQ] = useState('')
   const [page, setPage] = useState(1)
   const initialDateRange = useMemo(() => quickDateRange(30), [])
@@ -58,7 +62,13 @@ export function DocumentsPage() {
   const [createdBy, setCreatedBy] = useState('')
   const [selected, setSelected] = useState<MedicalDocument | null>(null)
   const perPage = 15
-  const isAdmin = user?.role?.code === 'ADMIN'
+  const isAdmin = user?.role?.code === 'ADMIN' || user?.role?.code === 'ADMIN_SST'
+
+  const countsQuery = useQuery({
+    queryKey: ['medical-documents', 'counts'],
+    queryFn: async () => (await api.get<DocumentCounts>('/medical-documents/counts')).data,
+  })
+  const counts = countsQuery.data ?? { pending: 0, received: 0, registered: 0, rejected: 0, annulled: 0 }
 
   const registrars = useQuery({
     queryKey: ['document-registrars', dateFrom, dateTo],
@@ -198,10 +208,11 @@ export function DocumentsPage() {
 
       <div className="card" style={{ padding: 0 }}>
         <div className="tabs" style={{ padding: '0 24px', paddingTop: 16 }}>
-          <button className={`tab ${status === 'PENDIENTE' ? 'active' : ''}`} onClick={() => { setStatus('PENDIENTE'); setPage(1) }}>Pendientes</button>
-          <button className={`tab ${status === 'RECEPCIONADO' ? 'active' : ''}`} onClick={() => { setStatus('RECEPCIONADO'); setPage(1) }}>Recepcionados</button>
-          <button className={`tab ${status === 'REGISTRADO' ? 'active' : ''}`} onClick={() => { setStatus('REGISTRADO'); setPage(1) }}>Registrados</button>
-          <button className={`tab ${status === 'RECHAZADO' ? 'active' : ''}`} onClick={() => { setStatus('RECHAZADO'); setPage(1) }}>Rechazados</button>
+          <button className={`tab ${status === 'PENDIENTE' ? 'active' : ''}`} onClick={() => { setStatus('PENDIENTE'); setPage(1) }}>Pendientes ({counts.pending})</button>
+          <button className={`tab ${status === 'RECEPCIONADO' ? 'active' : ''}`} onClick={() => { setStatus('RECEPCIONADO'); setPage(1) }}>Recepcionados ({counts.received})</button>
+          <button className={`tab ${status === 'REGISTRADO' ? 'active' : ''}`} onClick={() => { setStatus('REGISTRADO'); setPage(1) }}>Registrados ({counts.registered})</button>
+          <button className={`tab ${status === 'RECHAZADO' ? 'active' : ''}`} onClick={() => { setStatus('RECHAZADO'); setPage(1) }}>Rechazados ({counts.rejected})</button>
+          <button className={`tab ${status === 'ANULADO' ? 'active' : ''}`} onClick={() => { setStatus('ANULADO'); setPage(1) }}>Anulados ({counts.annulled})</button>
           <button className={`tab ${status === 'TODOS' ? 'active' : ''}`} onClick={() => { setStatus('TODOS'); setPage(1) }}>Todos</button>
           
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
@@ -331,13 +342,16 @@ function StatusModal({ document, onClose }: { document: MedicalDocument; onClose
   const [observation, setObservation] = useState('')
   const [error, setError] = useState('')
   const { user } = useAuth()
-  const isAdmin = user?.role?.code === 'ADMIN'
+  const isAdmin = user?.role?.code === 'ADMIN' || user?.role?.code === 'ADMIN_SST'
   const allowed = allowedStatusTransitions(document.status, isAdmin)
 
   const mutation = useMutation({
     mutationFn: async () => api.post(`/medical-documents/${document.id}/status`, { status: nextStatus, observation }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['documents'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['documents'] }),
+        queryClient.invalidateQueries({ queryKey: ['medical-documents', 'counts'] }),
+      ])
       onClose()
     },
     onError: (mutationError) => setError(getErrorMessage(mutationError)),

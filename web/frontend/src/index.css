@@ -276,6 +276,7 @@ tbody tr:hover { background: #f9fafb; }
 .badge.RECEPCIONADO { background: #dbeafe; color: #2563eb; }
 .badge.REGISTRADO { background: #dcfce7; color: #16a34a; }
 .badge.RECHAZADO { background: #fee2e2; color: #dc2626; }
+.badge.ANULADO { background: #e5e7eb; color: #374151; }
 .badge.ACTIVO { background: #dcfce7; color: #16a34a; }
 .badge.INACTIVO { background: #ffedd5; color: #ea580c; }
 
