@@ -106,9 +106,9 @@ export function DocumentDetailPage() {
           <h2>Datos del trabajador</h2>
           <div>
             <strong>{data.worker?.first_name} {data.worker?.last_name}</strong>
-            <div className="muted">{data.worker?.position ?? 'Sin cargo'}</div>
+            <div className="muted">{data.worker_position_snapshot ?? data.worker?.position ?? 'Sin cargo'}</div>
           </div>
-          <div className="muted">{data.worker?.management?.name} / {data.worker?.sector?.name}</div>
+          <div className="muted">{data.worker_management_name_snapshot ?? data.worker?.management?.name ?? '-'} / {data.worker_sector_name_snapshot ?? data.worker?.sector?.name ?? '-'}</div>
         </section>
         <section className="card grid">
           <h2>Entrega</h2>

@@ -113,11 +113,16 @@ class MedicalDocumentController extends Controller
 
         try {
             $document = DB::transaction(function () use ($request, $data) {
-            $worker = Worker::where('dni', $data['worker_dni'])->firstOrFail();
+            $worker = Worker::with(['management', 'sector'])->where('dni', $data['worker_dni'])->firstOrFail();
 
             $document = MedicalDocument::create([
                 'medical_document_type_id' => $data['medical_document_type_id'],
                 'worker_id' => $worker->id,
+                'worker_position_snapshot' => $data['worker_position_snapshot'] ?? $worker->position,
+                'worker_management_id_snapshot' => $data['worker_management_id_snapshot'] ?? $worker->management_id,
+                'worker_management_name_snapshot' => $data['worker_management_name_snapshot'] ?? $worker->management?->name,
+                'worker_sector_id_snapshot' => $data['worker_sector_id_snapshot'] ?? $worker->sector_id,
+                'worker_sector_name_snapshot' => $data['worker_sector_name_snapshot'] ?? $worker->sector?->name,
                 'document_date' => $data['document_date'],
                 'delivery_relation_id' => $data['delivery_relation_id'],
                 'delivery_relation_detail' => $data['delivery_relation_detail'] ?? null,
@@ -416,6 +421,11 @@ class MedicalDocumentController extends Controller
         return $request->validate([
             'medical_document_type_id' => ['required', 'exists:medical_document_types,id'],
             'worker_dni' => ['required', 'string', 'exists:workers,dni'],
+            'worker_position_snapshot' => ['nullable', 'string', 'max:191'],
+            'worker_management_id_snapshot' => ['nullable', 'integer', 'exists:managements,id'],
+            'worker_management_name_snapshot' => ['nullable', 'string', 'max:191'],
+            'worker_sector_id_snapshot' => ['nullable', 'integer', 'exists:sectors,id'],
+            'worker_sector_name_snapshot' => ['nullable', 'string', 'max:191'],
             'document_date' => ['required', 'date_format:Y-m-d'],
             'delivery_relation_id' => ['required', 'exists:delivery_relations,id'],
             'delivery_relation_detail' => ['nullable', 'string', 'max:255'],

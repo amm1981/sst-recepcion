@@ -221,6 +221,48 @@ class ApiEndpointsTest extends TestCase
             ->assertJsonPath('annulled', 1);
     }
 
+    public function test_medical_document_keeps_worker_job_snapshot_after_worker_changes(): void
+    {
+        Storage::fake('local');
+
+        $user = $this->adminUser();
+        $fixtures = $this->documentFixtures($user);
+        $worker = Worker::with(['management', 'sector'])->findOrFail($fixtures['worker_id']);
+        $worker->update(['position' => 'Operario de campo']);
+        $originalManagement = $worker->management;
+        $originalSector = $worker->sector;
+        Sanctum::actingAs($user);
+
+        $documentId = $this->post('/api/medical-documents', [
+            'medical_document_type_id' => $fixtures['medical_document_type_id'],
+            'worker_dni' => $worker->dni,
+            'document_date' => now('America/Lima')->toDateString(),
+            'delivery_relation_id' => $fixtures['delivery_relation_id'],
+            'deliverer_name' => 'Carlos Ramirez',
+            'contact_number' => '999111222',
+            'medical_document_file' => UploadedFile::fake()->create('descanso-medico.pdf', 128, 'application/pdf'),
+        ], ['Accept' => 'application/json'])->assertCreated()->json('id');
+
+        $newManagement = Management::create(['name' => 'Administracion', 'code' => 'ADM', 'is_active' => true]);
+        $newSector = Sector::create(['name' => 'Packing', 'code' => 'PACK', 'is_active' => true]);
+        $worker->update([
+            'position' => 'Supervisor',
+            'management_id' => $newManagement->id,
+            'sector_id' => $newSector->id,
+        ]);
+
+        $this->getJson("/api/medical-documents/{$documentId}")
+            ->assertOk()
+            ->assertJsonPath('worker_position_snapshot', 'Operario de campo')
+            ->assertJsonPath('worker_management_id_snapshot', $originalManagement->id)
+            ->assertJsonPath('worker_management_name_snapshot', $originalManagement->name)
+            ->assertJsonPath('worker_sector_id_snapshot', $originalSector->id)
+            ->assertJsonPath('worker_sector_name_snapshot', $originalSector->name)
+            ->assertJsonPath('worker.position', 'Supervisor')
+            ->assertJsonPath('worker.management.name', 'Administracion')
+            ->assertJsonPath('worker.sector.name', 'Packing');
+    }
+
     public function test_report_summary_applies_status_and_type_filters(): void
     {
         $user = $this->adminUser();

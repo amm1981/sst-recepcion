@@ -19,6 +19,11 @@ class MedicalDocument extends Model
     protected $fillable = [
         'medical_document_type_id',
         'worker_id',
+        'worker_position_snapshot',
+        'worker_management_id_snapshot',
+        'worker_management_name_snapshot',
+        'worker_sector_id_snapshot',
+        'worker_sector_name_snapshot',
         'document_date',
         'delivery_relation_id',
         'delivery_relation_detail',

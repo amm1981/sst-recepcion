@@ -46,14 +46,25 @@ class ReportController extends Controller
         }
 
         if ($request->filled('management_id') || $request->filled('sector_id')) {
-            $query->whereHas('worker', function ($q) use ($request) {
-                $q->when($request->filled('management_id'), function ($q2) use ($request) {
-                    $q2->where('management_id', $request->management_id);
+            if ($request->filled('management_id')) {
+                $query->where(function ($q) use ($request) {
+                    $q->where('medical_documents.worker_management_id_snapshot', $request->integer('management_id'))
+                        ->orWhere(function ($fallback) use ($request) {
+                            $fallback->whereNull('medical_documents.worker_management_id_snapshot')
+                                ->whereHas('worker', fn ($worker) => $worker->where('management_id', $request->integer('management_id')));
+                        });
                 });
-                $q->when($request->filled('sector_id'), function ($q2) use ($request) {
-                    $q2->where('sector_id', $request->sector_id);
+            }
+
+            if ($request->filled('sector_id')) {
+                $query->where(function ($q) use ($request) {
+                    $q->where('medical_documents.worker_sector_id_snapshot', $request->integer('sector_id'))
+                        ->orWhere(function ($fallback) use ($request) {
+                            $fallback->whereNull('medical_documents.worker_sector_id_snapshot')
+                                ->whereHas('worker', fn ($worker) => $worker->where('sector_id', $request->integer('sector_id')));
+                        });
                 });
-            });
+            }
         }
 
         $query->when($request->filled('q'), function ($q) use ($request) {
@@ -378,9 +389,9 @@ class ReportController extends Controller
                 $workerName,
                 $worker?->email,
                 $worker?->phone,
-                $worker?->position,
-                $payload['area_desc'] ?? $worker?->management?->name,
-                $worker?->sector?->name,
+                $document->worker_position_snapshot ?? $worker?->position,
+                $document->worker_management_name_snapshot ?? $payload['area_desc'] ?? $worker?->management?->name,
+                $document->worker_sector_name_snapshot ?? $worker?->sector?->name,
                 $payload['fundo'] ?? $payload['sede'] ?? $worker?->sector?->name,
                 optional($worker?->hire_date)->format('d/m/Y'),
                 optional($worker?->termination_date)->format('d/m/Y'),
@@ -556,8 +567,10 @@ class ReportController extends Controller
     private function workerHistoryPayload(Worker $worker): array
     {
         $payload = is_array($worker->external_payload) ? $worker->external_payload : [];
-        $area = $payload['area_desc'] ?? $worker->management?->name;
-        $fundo = $payload['fundo'] ?? $payload['sede'] ?? $worker->sector?->name;
+        $latestDocument = $worker->medicalDocuments->first();
+        $area = $latestDocument?->worker_management_name_snapshot ?? $payload['area_desc'] ?? $worker->management?->name;
+        $sectorName = $latestDocument?->worker_sector_name_snapshot ?? $worker->sector?->name;
+        $fundo = $payload['fundo'] ?? $payload['sede'] ?? $sectorName;
 
         return [
             'id' => $worker->id,
@@ -566,11 +579,11 @@ class ReportController extends Controller
             'last_name' => $worker->last_name,
             'email' => $worker->email,
             'phone' => $worker->phone,
-            'position' => $worker->position,
+            'position' => $latestDocument?->worker_position_snapshot ?? $worker->position,
             'area' => $area,
             'fundo' => $fundo,
             'management' => $worker->management,
-            'sector' => $worker->sector,
+            'sector' => $latestDocument?->worker_sector_name_snapshot ? ['name' => $latestDocument->worker_sector_name_snapshot] : $worker->sector,
             'documents_count' => (int) $worker->documents_count,
             'documents' => $worker->medicalDocuments->map(fn (MedicalDocument $document) => [
                 'id' => $document->id,

@@ -151,6 +151,11 @@ export type MedicalDocument = {
   status: Status
   contact_number: string
   document_date: string
+  worker_position_snapshot?: string | null
+  worker_management_id_snapshot?: number | null
+  worker_management_name_snapshot?: string | null
+  worker_sector_id_snapshot?: number | null
+  worker_sector_name_snapshot?: string | null
   observation?: string | null
   delivery_relation_detail?: string | null
   deliverer_name: string
