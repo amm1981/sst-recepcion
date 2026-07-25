@@ -98,7 +98,8 @@ export function DocumentsPage() {
         header: 'Nombre',
         cell: ({ row }) => `${row.original.worker?.first_name ?? ''} ${row.original.worker?.last_name ?? ''}`,
       },
-      { header: 'Fecha', cell: ({ row }) => new Date(row.original.created_at).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) },
+      { header: 'Fecha doc.', cell: ({ row }) => row.original.document_date ? new Date(`${row.original.document_date}T00:00:00`).toLocaleDateString('es-PE') : '-' },
+      { header: 'Registro', cell: ({ row }) => new Date(row.original.created_at).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) },
       { header: 'Estado', cell: ({ row }) => <StatusBadge status={row.original.status} /> },
       {
         header: 'Acciones',

@@ -73,7 +73,7 @@ export function DocumentDetailPage() {
       <div className="page-title">
         <div>
           <h1>Documento #{data.id}</h1>
-          <div className="muted">{data.type?.name} - DNI {data.worker?.dni}</div>
+          <div className="muted">{data.type?.name} - DNI {data.worker?.dni} - Fecha doc. {data.document_date ? new Date(`${data.document_date}T00:00:00`).toLocaleDateString('es-PE') : 'sin fecha'}</div>
         </div>
         <div className="header-actions">
           <StatusBadge status={data.status} />

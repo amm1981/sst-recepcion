@@ -128,6 +128,7 @@ class ApiEndpointsTest extends TestCase
         $this->post('/api/medical-documents', [
             'medical_document_type_id' => $fixtures['medical_document_type_id'],
             'worker_dni' => $worker->dni,
+            'document_date' => now('America/Lima')->toDateString(),
             'delivery_relation_id' => $fixtures['delivery_relation_id'],
             'deliverer_name' => 'Carlos Ramirez',
             'contact_number' => '999111222',
@@ -159,6 +160,7 @@ class ApiEndpointsTest extends TestCase
         $payload = [
             'medical_document_type_id' => $fixtures['medical_document_type_id'],
             'worker_dni' => $worker->dni,
+            'document_date' => now('America/Lima')->toDateString(),
             'delivery_relation_id' => $fixtures['delivery_relation_id'],
             'deliverer_name' => 'Carlos Ramirez',
             'contact_number' => '999111222',
@@ -541,6 +543,7 @@ class ApiEndpointsTest extends TestCase
         return [
             'medical_document_type_id' => $type->id,
             'worker_id' => $worker->id,
+            'document_date' => now('America/Lima')->toDateString(),
             'delivery_relation_id' => $relation->id,
             'deliverer_name' => 'Carlos Ramirez',
             'contact_number' => '999111222',

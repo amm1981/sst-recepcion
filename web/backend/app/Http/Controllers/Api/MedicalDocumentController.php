@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class MedicalDocumentController extends Controller
 {
@@ -101,6 +102,7 @@ class MedicalDocumentController extends Controller
 
         $data = $this->validatedDocument($request);
         $relation = DeliveryRelation::findOrFail($data['delivery_relation_id']);
+        $this->validateDocumentDateWindow($data['medical_document_type_id'], $data['document_date']);
 
         if ($relation->requires_detail && blank($data['delivery_relation_detail'] ?? null)) {
             return response()->json(['message' => 'Debe detallar la relacion de entrega.'], 422);
@@ -113,6 +115,7 @@ class MedicalDocumentController extends Controller
             $document = MedicalDocument::create([
                 'medical_document_type_id' => $data['medical_document_type_id'],
                 'worker_id' => $worker->id,
+                'document_date' => $data['document_date'],
                 'delivery_relation_id' => $data['delivery_relation_id'],
                 'delivery_relation_detail' => $data['delivery_relation_detail'] ?? null,
                 'deliverer_name' => $data['deliverer_name'],
@@ -385,6 +388,7 @@ class MedicalDocumentController extends Controller
         return $request->validate([
             'medical_document_type_id' => ['required', 'exists:medical_document_types,id'],
             'worker_dni' => ['required', 'string', 'exists:workers,dni'],
+            'document_date' => ['required', 'date_format:Y-m-d'],
             'delivery_relation_id' => ['required', 'exists:delivery_relations,id'],
             'delivery_relation_detail' => ['nullable', 'string', 'max:255'],
             'deliverer_name' => ['required', 'string', 'max:255'],
@@ -397,6 +401,33 @@ class MedicalDocumentController extends Controller
             'observation' => ['nullable', 'string'],
             'offline_uuid' => ['nullable', 'string', 'max:120'],
         ]);
+    }
+
+    private function validateDocumentDateWindow(int $typeId, string $documentDate): void
+    {
+        $type = \App\Models\MedicalDocumentType::findOrFail($typeId);
+        $allowedPastDays = $this->allowedPastDaysForType($type->code, $type->name);
+        $today = now('America/Lima')->startOfDay();
+        $date = \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $documentDate, 'America/Lima')->startOfDay();
+        $minDate = $today->copy()->subDays($allowedPastDays);
+
+        if ($date->lt($minDate) || $date->gt($today)) {
+            $label = $allowedPastDays === 1 ? '1 dia anterior' : "{$allowedPastDays} dias anteriores";
+            throw ValidationException::withMessages([
+                'document_date' => "La fecha del documento debe estar entre {$minDate->format('d/m/Y')} y {$today->format('d/m/Y')} para {$type->name} ({$label}).",
+            ]);
+        }
+    }
+
+    private function allowedPastDaysForType(?string $code, string $name): int
+    {
+        $normalized = Str::of(($code ?? '') . ' ' . $name)->ascii()->upper()->value();
+
+        if (str_contains($normalized, 'ATENCION')) {
+            return 1;
+        }
+
+        return 2;
     }
 
     private function offlineUuidFromRequest(Request $request): ?string

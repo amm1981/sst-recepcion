@@ -18,6 +18,7 @@ class MedicalDocument extends Model
     protected $fillable = [
         'medical_document_type_id',
         'worker_id',
+        'document_date',
         'delivery_relation_id',
         'delivery_relation_detail',
         'deliverer_name',
@@ -33,7 +34,10 @@ class MedicalDocument extends Model
 
     protected function casts(): array
     {
-        return ['status_changed_at' => 'datetime'];
+        return [
+            'document_date' => 'date:Y-m-d',
+            'status_changed_at' => 'datetime',
+        ];
     }
 
     public function type()

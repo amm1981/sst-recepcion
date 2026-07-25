@@ -36,6 +36,7 @@ data class SyncQueueEntity(
     val medicalDocumentTypeName: String,
     val workerDni: String,
     val workerName: String,
+    val documentDate: String,
     val deliveryRelationId: Int,
     val deliveryRelationDetail: String?,
     val delivererName: String,

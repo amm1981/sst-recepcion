@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Person
@@ -50,6 +51,7 @@ fun DocumentFormScreen(
     var selectedTypeId by remember { mutableStateOf<Int?>(null) }
     var selectedRelationId by remember { mutableStateOf<Int?>(null) }
     var dni by remember { mutableStateOf("") }
+    var documentDate by remember { mutableStateOf("") }
     var deliveryRelationDetail by remember { mutableStateOf("") }
     var delivererName by remember { mutableStateOf("") }
     var delivererDocument by remember { mutableStateOf("") }
@@ -62,8 +64,16 @@ fun DocumentFormScreen(
     var cameraOutputUri by remember { mutableStateOf<Uri?>(null) }
     var pendingCameraTarget by remember { mutableStateOf<PhotoTarget?>(null) }
     var localError by remember { mutableStateOf<String?>(null) }
+    val selectedType = state.documentTypes.firstOrNull { it.id == selectedTypeId }
     val selectedRelation = state.deliveryRelations.firstOrNull { it.id == selectedRelationId }
     val isWorkerRelation = selectedRelation?.code == "TRABAJADOR" || selectedRelation?.name.equals("Trabajador", ignoreCase = true)
+    val typeReady = selectedTypeId != null
+    val workerReady = state.selectedWorker != null
+    val documentReady = medicalDocumentUri != null
+    val documentDateError = viewModel.validateDocumentDate(documentDate, selectedType)
+    val dateReady = documentReady && documentDate.isNotBlank() && documentDateError == null
+    val deliveryReady = dateReady && selectedRelationId != null && delivererName.isNotBlank()
+    val contactReady = deliveryReady && contactNumber.isNotBlank()
 
     val delivererPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
         if (it != null) {
@@ -75,6 +85,7 @@ fun DocumentFormScreen(
         if (it != null) {
             context.persistReadPermission(it)
             medicalDocumentUri = it
+            viewModel.extractDateFromDocument(it)
         }
     }
     val annexPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) {
@@ -86,7 +97,10 @@ fun DocumentFormScreen(
         if (success && uri != null) {
             when (cameraTarget) {
                 PhotoTarget.Dni -> delivererPhotoUri = uri
-                PhotoTarget.Document -> medicalDocumentUri = uri
+                PhotoTarget.Document -> {
+                    medicalDocumentUri = uri
+                    viewModel.extractDateFromDocument(uri)
+                }
                 null -> Unit
             }
         } else {
@@ -141,6 +155,12 @@ fun DocumentFormScreen(
                 delivererName = "${it.firstName} ${it.lastName}"
                 delivererDocument = it.dni
             }
+        }
+    }
+
+    LaunchedEffect(state.extractedDateCandidates) {
+        if (state.extractedDateCandidates.size == 1) {
+            documentDate = state.extractedDateCandidates.first()
         }
     }
 
@@ -199,6 +219,7 @@ fun DocumentFormScreen(
                     value = dni,
                     onValueChange = { dni = it.take(80) },
                     modifier = Modifier.weight(1f),
+                    enabled = typeReady,
                     placeholder = { Text("DNI, nombre o apellidos") },
                     shape = RoundedCornerShape(8.dp),
                     singleLine = true
@@ -208,7 +229,8 @@ fun DocumentFormScreen(
                     onClick = { viewModel.searchWorker(dni) },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
-                    modifier = Modifier.height(56.dp)
+                    modifier = Modifier.height(56.dp),
+                    enabled = typeReady && !state.isLoading
                 ) {
                     Icon(Icons.Default.Search, contentDescription = "Buscar", tint = Color.White)
                 }
@@ -254,11 +276,57 @@ fun DocumentFormScreen(
                 }
             }
 
+            PhotoUploadSection(
+                title = "Documento *",
+                selectedText = medicalDocumentUri?.lastPathSegment,
+                enabled = workerReady,
+                onCamera = { openCamera(PhotoTarget.Document) },
+                onAttach = { documentPicker.launch(documentMimeTypes()) }
+            )
+            Text(
+                "Formatos permitidos: DOCX, PDF, JPEG, JPG, PNG. Tamano maximo por archivo: 10MB. Las imagenes se comprimen antes de subir.",
+                fontSize = 12.sp,
+                color = Color.Gray
+            )
+            OutlinedTextField(
+                value = documentDate,
+                onValueChange = { documentDate = it.take(10) },
+                label = { Text("Fecha del documento *") },
+                placeholder = { Text("AAAA-MM-DD") },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = documentReady,
+                shape = RoundedCornerShape(8.dp),
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) }
+            )
+            state.dateExtractionMessage?.let {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (state.isExtractingDate) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = PrimaryGreen, strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    Text(it, fontSize = 12.sp, color = if (state.extractedDateCandidates.isNotEmpty()) PrimaryGreen else Color.Gray)
+                }
+            }
+            if (state.extractedDateCandidates.size > 1) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.extractedDateCandidates.take(3).forEach { candidate ->
+                        OutlinedButton(onClick = { documentDate = candidate }, shape = RoundedCornerShape(8.dp)) {
+                            Text(candidate, color = PrimaryGreen, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+            if (documentDateError != null && documentDate.isNotBlank()) {
+                Text(documentDateError, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
+            }
+
             Text("Relación de quien entrega *", fontWeight = FontWeight.Medium)
             CatalogSelector(
                 items = state.deliveryRelations,
                 selectedId = selectedRelationId,
                 placeholder = "Seleccione relación",
+                enabled = dateReady,
                 onSelected = {
                     selectedRelationId = it.id
                     if (it.code == "TRABAJADOR" || it.name.equals("Trabajador", ignoreCase = true)) {
@@ -281,6 +349,7 @@ fun DocumentFormScreen(
                     onValueChange = { deliveryRelationDetail = it },
                     label = { Text("Detalle de relación") },
                     modifier = Modifier.fillMaxWidth(),
+                    enabled = dateReady,
                     shape = RoundedCornerShape(8.dp)
                 )
             }
@@ -290,6 +359,7 @@ fun DocumentFormScreen(
                 onValueChange = { delivererName = it },
                 label = { Text("Nombre de quien entrega *") },
                 modifier = Modifier.fillMaxWidth(),
+                enabled = dateReady,
                 shape = RoundedCornerShape(8.dp),
                 singleLine = true
             )
@@ -298,6 +368,7 @@ fun DocumentFormScreen(
                 onValueChange = { delivererDocument = it },
                 label = { Text("Documento de quien entrega") },
                 modifier = Modifier.fillMaxWidth(),
+                enabled = dateReady,
                 shape = RoundedCornerShape(8.dp),
                 singleLine = true
             )
@@ -305,20 +376,9 @@ fun DocumentFormScreen(
             PhotoUploadSection(
                 title = "Foto de quien entrega",
                 selectedText = delivererPhotoUri?.lastPathSegment,
+                enabled = dateReady,
                 onCamera = { openCamera(PhotoTarget.Dni) },
                 onAttach = { delivererPicker.launch(arrayOf("image/*")) }
-            )
-            PhotoUploadSection(
-                title = "Documento *",
-                selectedText = medicalDocumentUri?.lastPathSegment,
-                onCamera = { openCamera(PhotoTarget.Document) },
-                onAttach = { documentPicker.launch(documentMimeTypes()) }
-            )
-
-            Text(
-                "Formatos permitidos: DOCX, PDF, JPEG, JPG, PNG. Tamano maximo por archivo: 10MB. Las imagenes se comprimen antes de subir.",
-                fontSize = 12.sp,
-                color = Color.Gray
             )
 
             OutlinedTextField(
@@ -328,6 +388,7 @@ fun DocumentFormScreen(
                 label = { Text("Número de Contacto *") },
                 placeholder = { Text("987654321") },
                 shape = RoundedCornerShape(8.dp),
+                enabled = deliveryReady,
                 leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
                 singleLine = true
             )
@@ -337,6 +398,7 @@ fun DocumentFormScreen(
                 onValueChange = { observation = it },
                 label = { Text("Observación") },
                 modifier = Modifier.fillMaxWidth(),
+                enabled = deliveryReady,
                 shape = RoundedCornerShape(8.dp),
                 minLines = 2
             )
@@ -348,7 +410,8 @@ fun DocumentFormScreen(
             OutlinedButton(
                 onClick = { annexPicker.launch(documentMimeTypes()) },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(8.dp),
+                enabled = contactReady
             ) {
                 Icon(Icons.Default.Add, contentDescription = null, tint = PrimaryGreen)
                 Spacer(modifier = Modifier.width(8.dp))
@@ -366,6 +429,7 @@ fun DocumentFormScreen(
                 onClick = {
                     viewModel.saveDocument(
                         documentTypeId = selectedTypeId,
+                        documentDate = documentDate,
                         deliveryRelationId = selectedRelationId,
                         deliveryRelationDetail = deliveryRelationDetail,
                         delivererName = delivererName,
@@ -382,7 +446,7 @@ fun DocumentFormScreen(
                     .height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
                 shape = RoundedCornerShape(8.dp),
-                enabled = !state.isLoading && !state.isSaving
+                enabled = contactReady && !state.isLoading && !state.isSaving
             ) {
                 if (state.isSaving) {
                     CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
@@ -401,16 +465,18 @@ private fun CatalogSelector(
     selectedId: Int?,
     placeholder: String,
     leadingIcon: @Composable (() -> Unit)? = null,
+    enabled: Boolean = true,
     onSelected: (CatalogEntity) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selected = items.firstOrNull { it.id == selectedId }
 
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { if (enabled) expanded = !expanded }) {
         OutlinedTextField(
             value = selected?.name ?: placeholder,
             onValueChange = {},
             readOnly = true,
+            enabled = enabled,
             leadingIcon = leadingIcon,
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
@@ -455,6 +521,7 @@ private fun CatalogSelector(
 private fun PhotoUploadSection(
     title: String,
     selectedText: String?,
+    enabled: Boolean = true,
     onCamera: () -> Unit,
     onAttach: () -> Unit
 ) {
@@ -464,12 +531,12 @@ private fun PhotoUploadSection(
             Text(selectedText, color = PrimaryGreen, fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp))
         }
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onCamera, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = onCamera, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp), enabled = enabled) {
                 Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.Black)
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Tomar Foto", color = Color.Black, fontSize = 13.sp)
             }
-            OutlinedButton(onClick = onAttach, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp)) {
+            OutlinedButton(onClick = onAttach, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp), enabled = enabled) {
                 Icon(Icons.Default.AttachFile, contentDescription = null, tint = Color.Black)
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Adjuntar", color = Color.Black, fontSize = 13.sp)

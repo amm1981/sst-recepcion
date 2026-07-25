@@ -24,6 +24,7 @@ docssalud_db_device.sqlite*
 
 # Android / Gradle
 app/.gradle/
+app/.kotlin/
 app/build/
 app/**/build/
 app/local.properties

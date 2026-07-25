@@ -7,6 +7,7 @@ import com.amm1981.docssalud.data.local.dao.CatalogDao
 import com.amm1981.docssalud.data.local.dao.WorkerDao
 import com.amm1981.docssalud.data.local.entity.CatalogEntity
 import com.amm1981.docssalud.data.local.entity.WorkerEntity
+import com.amm1981.docssalud.data.ocr.DocumentDateExtractor
 import com.amm1981.docssalud.data.repository.DocumentRepository
 import com.amm1981.docssalud.data.repository.SyncRepository
 import com.amm1981.docssalud.workers.DocumentSyncScheduler
@@ -15,6 +16,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.Normalizer
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.inject.Inject
 
 data class DocumentFormState(
@@ -25,7 +30,10 @@ data class DocumentFormState(
     val documentTypes: List<CatalogEntity> = emptyList(),
     val deliveryRelations: List<CatalogEntity> = emptyList(),
     val selectedWorker: WorkerEntity? = null,
-    val workerResults: List<WorkerEntity> = emptyList()
+    val workerResults: List<WorkerEntity> = emptyList(),
+    val isExtractingDate: Boolean = false,
+    val extractedDateCandidates: List<String> = emptyList(),
+    val dateExtractionMessage: String? = null
 )
 
 @HiltViewModel
@@ -34,7 +42,8 @@ class DocumentFormViewModel @Inject constructor(
     private val catalogDao: CatalogDao,
     private val documentRepository: DocumentRepository,
     private val syncRepository: SyncRepository,
-    private val documentSyncScheduler: DocumentSyncScheduler
+    private val documentSyncScheduler: DocumentSyncScheduler,
+    private val documentDateExtractor: DocumentDateExtractor
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(DocumentFormState())
@@ -95,8 +104,35 @@ class DocumentFormViewModel @Inject constructor(
         _state.value = _state.value.copy(selectedWorker = worker, error = null)
     }
 
+    fun extractDateFromDocument(uri: Uri) {
+        _state.value = _state.value.copy(
+            isExtractingDate = true,
+            extractedDateCandidates = emptyList(),
+            dateExtractionMessage = "Procesando OCR local..."
+        )
+        viewModelScope.launch {
+            runCatching { documentDateExtractor.extract(uri) }
+                .onSuccess { result ->
+                    _state.value = _state.value.copy(
+                        isExtractingDate = false,
+                        extractedDateCandidates = result.candidates,
+                        dateExtractionMessage = result.message,
+                        error = null
+                    )
+                }
+                .onFailure {
+                    _state.value = _state.value.copy(
+                        isExtractingDate = false,
+                        extractedDateCandidates = emptyList(),
+                        dateExtractionMessage = "No se pudo reconocer la fecha. Ingrese la fecha manualmente."
+                    )
+                }
+        }
+    }
+
     fun saveDocument(
         documentTypeId: Int?,
+        documentDate: String,
         deliveryRelationId: Int?,
         deliveryRelationDetail: String?,
         delivererName: String,
@@ -112,10 +148,15 @@ class DocumentFormViewModel @Inject constructor(
         val worker = _state.value.selectedWorker
         val documentType = _state.value.documentTypes.firstOrNull { it.id == documentTypeId }
         val relation = _state.value.deliveryRelations.firstOrNull { it.id == deliveryRelationId }
+        val documentDateError = validateDocumentDate(documentDate, documentType)
 
         when {
             documentType == null -> {
                 _state.value = _state.value.copy(error = "Seleccione el tipo de documento.")
+                return
+            }
+            documentDateError != null -> {
+                _state.value = _state.value.copy(error = documentDateError)
                 return
             }
             worker == null -> {
@@ -155,6 +196,7 @@ class DocumentFormViewModel @Inject constructor(
                 medicalDocumentTypeName = documentType.name,
                 workerDni = worker.dni,
                 workerName = "${worker.firstName} ${worker.lastName}",
+                documentDate = documentDate,
                 deliveryRelationId = relation.id,
                 deliveryRelationDetail = deliveryRelationDetail?.takeIf { it.isNotBlank() },
                 delivererName = delivererName,
@@ -176,5 +218,26 @@ class DocumentFormViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    fun validateDocumentDate(documentDate: String, documentType: CatalogEntity?): String? {
+        if (documentDate.isBlank()) return "Ingrese la fecha del documento."
+        val parsed = runCatching { LocalDate.parse(documentDate, DateTimeFormatter.ISO_LOCAL_DATE) }.getOrNull()
+            ?: return "Ingrese una fecha valida."
+        val today = LocalDate.now()
+        val minDate = today.minusDays(allowedPastDays(documentType).toLong())
+        return if (parsed.isBefore(minDate) || parsed.isAfter(today)) {
+            val label = if (allowedPastDays(documentType) == 1) "1 dia anterior" else "${allowedPastDays(documentType)} dias anteriores"
+            "La fecha debe estar entre ${minDate.format(DateTimeFormatter.ISO_LOCAL_DATE)} y ${today.format(DateTimeFormatter.ISO_LOCAL_DATE)} para este tipo de documento ($label)."
+        } else {
+            null
+        }
+    }
+
+    private fun allowedPastDays(documentType: CatalogEntity?): Int {
+        val normalized = Normalizer.normalize("${documentType?.code.orEmpty()} ${documentType?.name.orEmpty()}", Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "")
+            .uppercase(Locale("es", "PE"))
+        return if (normalized.contains("ATENCION")) 1 else 2
     }
 }

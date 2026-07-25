@@ -148,6 +148,7 @@ export type MedicalDocument = {
   id: number
   status: Status
   contact_number: string
+  document_date: string
   observation?: string | null
   delivery_relation_detail?: string | null
   deliverer_name: string
