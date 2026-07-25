@@ -201,18 +201,26 @@ class ApiEndpointsTest extends TestCase
         $this->assertFalse($user->canDo('admin.manage'));
 
         $this->deleteJson("/api/medical-documents/{$document->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['observation']);
+
+        $this->deleteJson("/api/medical-documents/{$document->id}", [
+            'observation' => 'Documento duplicado por regularizacion.',
+        ])
             ->assertOk()
             ->assertJsonPath('status', MedicalDocument::STATUS_ANNULLED);
 
         $this->assertDatabaseHas('medical_documents', [
             'id' => $document->id,
             'status' => MedicalDocument::STATUS_ANNULLED,
+            'observation' => 'Documento duplicado por regularizacion.',
             'deleted_at' => null,
         ]);
         $this->assertDatabaseHas('medical_document_status_history', [
             'medical_document_id' => $document->id,
             'from_status' => MedicalDocument::STATUS_REGISTERED,
             'to_status' => MedicalDocument::STATUS_ANNULLED,
+            'observation' => 'Documento duplicado por regularizacion.',
         ]);
 
         $this->getJson('/api/medical-documents/counts')

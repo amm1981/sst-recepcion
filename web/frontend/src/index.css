@@ -401,6 +401,8 @@ tbody tr:hover { background: #f9fafb; }
 .scan-message.found { background: #ecfdf5; border-color: #a7f3d0; color: #047857; }
 .scan-message.empty, .scan-message.multiple { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
 .dropzone-box.disabled { cursor: not-allowed; opacity: 0.65; }
+.documents-card-body { min-width: 0; }
+.document-export-actions { gap: 6px; }
 
 /* Radio Cards */
 .radio-card-list { display: flex; flex-direction: column; gap: 12px; }
@@ -1414,6 +1416,122 @@ tbody tr:hover { background: #f9fafb; }
   .document-filters {
     grid-template-columns: 1fr;
     width: 100%;
+  }
+
+  .documents-card {
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .documents-card-body {
+    padding: 0 12px 14px !important;
+  }
+
+  .document-status-tabs {
+    gap: 8px;
+    padding: 12px 12px 8px !important;
+    margin-bottom: 12px;
+  }
+
+  .document-status-tabs .tab {
+    padding: 9px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #ffffff;
+    font-size: 13px;
+  }
+
+  .document-status-tabs .tab.active {
+    background: #ecfdf5;
+    border-color: #047857;
+  }
+
+  .document-export-actions {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    margin-left: 0 !important;
+    gap: 8px;
+  }
+
+  .document-export-actions .btn {
+    width: 100%;
+    padding: 9px 10px !important;
+  }
+
+  .documents-filter-toolbar {
+    padding: 12px;
+    margin-bottom: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #f8fafc;
+  }
+
+  .documents-filter-toolbar .field {
+    gap: 5px;
+  }
+
+  .new-document-page .page-title {
+    margin-bottom: 14px !important;
+  }
+
+  .new-document-page .document-flow {
+    gap: 12px;
+    max-width: none;
+  }
+
+  .new-document-page .new-doc-section {
+    padding: 14px;
+  }
+
+  .new-document-page .flow-section {
+    gap: 14px;
+  }
+
+  .new-document-page .flow-section-header {
+    gap: 10px;
+  }
+
+  .new-document-page .flow-section-header .section-title {
+    font-size: 15px;
+    margin-bottom: 3px;
+  }
+
+  .new-document-page .flow-caption {
+    font-size: 12px;
+  }
+
+  .new-document-page .radio-card-list.compact,
+  .new-document-page .flow-two-columns {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .new-document-page .radio-card {
+    min-height: 48px;
+    padding: 12px;
+  }
+
+  .search-input-integrated {
+    min-height: 46px;
+  }
+
+  .worker-result-list {
+    max-height: 280px;
+    overflow: auto;
+    padding: 8px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #f8fafc;
+  }
+
+  .worker-result-item {
+    padding: 12px;
+    background: #ffffff;
+  }
+
+  .worker-card-styled {
+    padding: 14px;
   }
 
   .search-input {

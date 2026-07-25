@@ -173,6 +173,7 @@ export function NewDocumentPage() {
   const [worker, setWorker] = useState<Worker | null>(null)
   const [workerResults, setWorkerResults] = useState<Worker[]>([])
   const [workerError, setWorkerError] = useState('')
+  const [isWorkerSearching, setIsWorkerSearching] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [scanStatus, setScanStatus] = useState<'idle' | 'processing' | 'found' | 'multiple' | 'empty'>('idle')
   const [scanMessage, setScanMessage] = useState('')
@@ -214,6 +215,7 @@ export function NewDocumentPage() {
   const medicalFile = useWatch({ control: form.control, name: 'medical_document_file' })
   const annexes = useWatch({ control: form.control, name: 'annexes' })
   const selectedTypeId = useWatch({ control: form.control, name: 'medical_document_type_id' })
+  const workerQuery = useWatch({ control: form.control, name: 'worker_dni' })
   const documentDate = useWatch({ control: form.control, name: 'document_date' })
   const delivererName = useWatch({ control: form.control, name: 'deliverer_name' })
   const contactNumber = useWatch({ control: form.control, name: 'contact_number' })
@@ -257,26 +259,27 @@ export function NewDocumentPage() {
       setWorkerError('Ingrese DNI, nombre o apellidos.')
       return
     }
+    setIsWorkerSearching(true)
     try {
-      const response = await api.get<Worker>(`/workers/search/${encodeURIComponent(query)}`)
-      selectWorker(response.data)
-    } catch {
-      try {
-        const response = await api.get<Paginated<Worker>>('/workers', {
-          params: { q: query, is_active: true, per_page: 10 },
-        })
-        const results = response.data.data ?? []
-        if (results.length === 1) {
-          selectWorker(results[0])
-        } else if (results.length > 1) {
-          setWorkerResults(results)
-          setWorkerError('Se encontraron varios trabajadores. Seleccione uno para continuar.')
-        } else {
-          setWorkerError('Trabajador no encontrado.')
-        }
-      } catch {
+      const response = await api.get<Paginated<Worker>>('/workers', {
+        params: { q: query, is_active: true, per_page: 10 },
+      })
+      const results = response.data.data ?? []
+      const exact = results.find((result) => result.dni === query)
+      if (exact) {
+        selectWorker(exact)
+      } else if (results.length === 1) {
+        selectWorker(results[0])
+      } else if (results.length > 1) {
+        setWorkerResults(results)
+        setWorkerError('Se encontraron varios trabajadores. Seleccione uno para continuar.')
+      } else {
         setWorkerError('Trabajador no encontrado.')
       }
+    } catch {
+      setWorkerError('Trabajador no encontrado.')
+    } finally {
+      setIsWorkerSearching(false)
     }
   }
 
@@ -320,6 +323,44 @@ export function NewDocumentPage() {
     }
   }, [form, isWorkerRelation, selectedRelation, worker])
 
+  useEffect(() => {
+    const query = workerQuery?.trim() ?? ''
+    if (!typeStepReady) {
+      setWorkerResults([])
+      return
+    }
+    if (worker && query !== worker.dni) {
+      setWorker(null)
+    }
+    if (query.length < 2 || query === worker?.dni) {
+      setWorkerResults([])
+      return
+    }
+
+    let cancelled = false
+    const timeout = window.setTimeout(async () => {
+      setIsWorkerSearching(true)
+      try {
+        const response = await api.get<Paginated<Worker>>('/workers', {
+          params: { q: query, is_active: true, per_page: 8 },
+        })
+        if (!cancelled) {
+          setWorkerResults(response.data.data ?? [])
+          setWorkerError('')
+        }
+      } catch {
+        if (!cancelled) setWorkerResults([])
+      } finally {
+        if (!cancelled) setIsWorkerSearching(false)
+      }
+    }, 300)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeout)
+    }
+  }, [typeStepReady, worker, workerQuery])
+
   const mutation = useMutation({
     mutationFn: async (values: NewDocumentForm) => {
       setSubmitError('')
@@ -354,7 +395,7 @@ export function NewDocumentPage() {
   const { ref: aRef, ...aRest } = form.register('annexes')
 
   return (
-    <div>
+    <div className="new-document-page">
       <div className="breadcrumb">
         <Link to="/dashboard">Inicio</Link> &gt; <span>Nuevo Registro</span>
       </div>
@@ -410,16 +451,30 @@ export function NewDocumentPage() {
           <div className="field">
             <label>Trabajador *</label>
             <div className="search-input-integrated">
-              <input {...form.register('worker_dni')} placeholder="Buscar por DNI, nombre o apellidos" disabled={!typeStepReady} />
-              <button type="button" className="search-btn" onClick={searchWorker} disabled={!typeStepReady || mutation.isPending}>
-                <Search size={18} />
+              <input
+                {...form.register('worker_dni')}
+                placeholder="Buscar por DNI, nombre o apellidos"
+                disabled={!typeStepReady}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    if (workerResults.length === 1) {
+                      selectWorker(workerResults[0])
+                    } else {
+                      void searchWorker()
+                    }
+                  }
+                }}
+              />
+              <button type="button" className="search-btn" onClick={searchWorker} disabled={!typeStepReady || mutation.isPending || isWorkerSearching}>
+                {isWorkerSearching ? <Loader2 size={18} className="spin" /> : <Search size={18} />}
               </button>
             </div>
             {workerError && <span className="error">{workerError}</span>}
             {form.formState.errors.worker_dni && <span className="error">{form.formState.errors.worker_dni.message}</span>}
           </div>
 
-          {workerResults.length > 1 && (
+          {workerResults.length > 0 && !worker && (
             <div className="worker-result-list">
               {workerResults.map((result) => (
                 <button key={result.id} type="button" className="worker-result-item" onClick={() => selectWorker(result)}>

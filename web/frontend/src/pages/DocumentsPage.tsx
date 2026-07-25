@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnDef } from '@tanstack/react-table'
-import { Calendar, FileSpreadsheet, Upload, RefreshCw, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
+import { Ban, Calendar, FileSpreadsheet, Upload, RefreshCw, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api, getErrorMessage } from '../api/client'
@@ -61,6 +61,7 @@ export function DocumentsPage() {
   const [dateTo, setDateTo] = useState(initialDateRange.to)
   const [createdBy, setCreatedBy] = useState('')
   const [selected, setSelected] = useState<MedicalDocument | null>(null)
+  const [annulling, setAnnulling] = useState<MedicalDocument | null>(null)
   const perPage = 15
   const isAdmin = user?.role?.code === 'ADMIN' || user?.role?.code === 'ADMIN_SST'
 
@@ -118,6 +119,11 @@ export function DocumentsPage() {
             {can('documents.updateStatus') && allowedStatusTransitions(row.original.status, isAdmin).length > 0 ? (
               <button className="icon-btn ghost" type="button" onClick={() => setSelected(row.original)} title="Cambiar estado" style={{ color: '#047857' }}>
                 <RefreshCw size={18} />
+              </button>
+            ) : null}
+            {can('documents.annul') && row.original.status !== 'ANULADO' ? (
+              <button className="icon-btn ghost" type="button" onClick={() => setAnnulling(row.original)} title="Anular documento" style={{ color: '#dc2626' }}>
+                <Ban size={18} />
               </button>
             ) : null}
             <Link className="icon-btn ghost" to={`/documents/${row.original.id}`} title="Ver detalle" style={{ color: '#9ca3af' }}>
@@ -201,13 +207,13 @@ export function DocumentsPage() {
   }
 
   return (
-    <div>
+    <div className="documents-page">
       <div className="page-title" style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 24 }}>Documentos</h1>
       </div>
 
-      <div className="card" style={{ padding: 0 }}>
-        <div className="tabs" style={{ padding: '0 24px', paddingTop: 16 }}>
+      <div className="card documents-card" style={{ padding: 0 }}>
+        <div className="tabs document-status-tabs" style={{ padding: '0 24px', paddingTop: 16 }}>
           <button className={`tab ${status === 'PENDIENTE' ? 'active' : ''}`} onClick={() => { setStatus('PENDIENTE'); setPage(1) }}>Pendientes ({counts.pending})</button>
           <button className={`tab ${status === 'RECEPCIONADO' ? 'active' : ''}`} onClick={() => { setStatus('RECEPCIONADO'); setPage(1) }}>Recepcionados ({counts.received})</button>
           <button className={`tab ${status === 'REGISTRADO' ? 'active' : ''}`} onClick={() => { setStatus('REGISTRADO'); setPage(1) }}>Registrados ({counts.registered})</button>
@@ -215,7 +221,7 @@ export function DocumentsPage() {
           <button className={`tab ${status === 'ANULADO' ? 'active' : ''}`} onClick={() => { setStatus('ANULADO'); setPage(1) }}>Anulados ({counts.annulled})</button>
           <button className={`tab ${status === 'TODOS' ? 'active' : ''}`} onClick={() => { setStatus('TODOS'); setPage(1) }}>Todos</button>
           
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+          <div className="document-export-actions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
             <button className="btn ghost" style={{ color: '#047857', padding: '8px 12px' }} onClick={handleExport}>
               <Upload size={18} />
               Exportar
@@ -227,7 +233,7 @@ export function DocumentsPage() {
           </div>
         </div>
 
-        <div style={{ padding: '0 24px 24px' }}>
+        <div className="documents-card-body" style={{ padding: '0 24px 24px' }}>
           <div className="toolbar documents-filter-toolbar">
             <div className="filters document-filters">
               <div className="field document-filter-search">
@@ -332,6 +338,7 @@ export function DocumentsPage() {
       </div>
       
       {selected ? <StatusModal document={selected} onClose={() => setSelected(null)} /> : null}
+      {annulling ? <AnnulModal document={annulling} onClose={() => setAnnulling(null)} /> : null}
     </div>
   )
 }
@@ -379,6 +386,49 @@ function StatusModal({ document, onClose }: { document: MedicalDocument; onClose
         <button className="btn" type="button" disabled={!nextStatus || mutation.isPending} onClick={() => mutation.mutate()}>
           Guardar
         </button>
+      </div>
+    </Modal>
+  )
+}
+
+function AnnulModal({ document, onClose }: { document: MedicalDocument; onClose: () => void }) {
+  const queryClient = useQueryClient()
+  const [observation, setObservation] = useState('')
+  const [error, setError] = useState('')
+  const reason = observation.trim()
+
+  const mutation = useMutation({
+    mutationFn: async () => api.delete(`/medical-documents/${document.id}`, { data: { observation: reason } }),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['documents'] }),
+        queryClient.invalidateQueries({ queryKey: ['medical-documents', 'counts'] }),
+      ])
+      onClose()
+    },
+    onError: (mutationError) => setError(getErrorMessage(mutationError)),
+  })
+
+  return (
+    <Modal title={`Anular documento #${document.id}`} onClose={onClose}>
+      <div className="grid">
+        <p className="muted-text">El documento se marcara como ANULADO y se conservara para trazabilidad. Indique el motivo antes de continuar.</p>
+        <div className="field">
+          <label>Motivo de anulacion *</label>
+          <textarea
+            value={observation}
+            onChange={(event) => setObservation(event.target.value)}
+            placeholder="Ejemplo: documento duplicado, registro equivocado o archivo incorrecto."
+          />
+        </div>
+        {error ? <div className="error">{error}</div> : null}
+        <div className="header-actions" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn secondary" type="button" onClick={onClose}>Cancelar</button>
+          <button className="btn danger" type="button" disabled={reason.length < 3 || mutation.isPending} onClick={() => mutation.mutate()}>
+            <Ban size={18} />
+            Anular
+          </button>
+        </div>
       </div>
     </Modal>
   )

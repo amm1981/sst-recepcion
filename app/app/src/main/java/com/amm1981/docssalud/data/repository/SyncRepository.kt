@@ -33,7 +33,7 @@ class SyncRepository @Inject constructor(
 
     /**
      * Sync all data. Catalogs are small and always fully replaced.
-     * Workers use incremental sync after the first full load.
+     * Forced worker sync uses a full refresh so local master data cannot stay stale.
      */
     suspend fun syncAll(
         forceWorkers: Boolean = false,
@@ -43,9 +43,10 @@ class SyncRepository @Inject constructor(
             onProgress?.invoke(SyncProgress(5, "Preparando actualizacion..."))
             val catalogsResult = syncCatalogs()
             onProgress?.invoke(SyncProgress(35, "Catalogos actualizados."))
-            val workersResult = if (forceWorkers || shouldAutoSyncWorkers() || workerDao.count() == 0) {
+            val currentWorkerCount = workerDao.count()
+            val workersResult = if (forceWorkers || shouldAutoSyncWorkers() || currentWorkerCount == 0) {
                 onProgress?.invoke(SyncProgress(45, "Actualizando trabajadores..."))
-                syncWorkers().also {
+                syncWorkers(forceFull = forceWorkers || currentWorkerCount == 0).also {
                     if (it.isSuccess) onProgress?.invoke(SyncProgress(90, "Trabajadores actualizados."))
                 }
             } else {
@@ -100,15 +101,14 @@ class SyncRepository @Inject constructor(
     }
 
     /**
-     * Sync workers. Uses incremental sync after first load:
-     * - First time: fetch all active workers
-     * - Subsequent: fetch only workers updated since last sync timestamp
+     * Sync workers. Uses incremental sync for automatic background refreshes.
+     * Forced sync downloads all active workers and replaces the local table.
      */
-    private suspend fun syncWorkers(): Result<Unit> {
+    private suspend fun syncWorkers(forceFull: Boolean): Result<Unit> {
         return try {
             val lastSync = prefs.getString(PREF_LAST_WORKER_SYNC, null)
 
-            val workersResponse = if (lastSync != null) {
+            val workersResponse = if (!forceFull && lastSync != null) {
                 api.syncWorkersIncremental(updatedSince = lastSync)
             } else {
                 api.syncWorkers()
@@ -132,14 +132,12 @@ class SyncRepository @Inject constructor(
                     )
                 }
 
-                if (lastSync == null) {
-                    // First sync: clear and insert all
+                if (forceFull || lastSync == null) {
                     workerDao.clearAll()
                     workerDao.insertAll(workers)
                 } else {
-                    // Incremental: upsert only changed workers
                     if (workers.isNotEmpty()) {
-                        workerDao.insertAll(workers) // REPLACE strategy handles upserts
+                        workerDao.insertAll(workers)
                     }
                 }
 

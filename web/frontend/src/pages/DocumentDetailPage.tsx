@@ -446,9 +446,11 @@ function AnnulDocumentModal({
   onAnnulled: () => void
 }) {
   const queryClient = useQueryClient()
+  const [observation, setObservation] = useState('')
   const [error, setError] = useState('')
+  const reason = observation.trim()
   const mutation = useMutation({
-    mutationFn: async () => api.delete(`/medical-documents/${document.id}`),
+    mutationFn: async () => api.delete(`/medical-documents/${document.id}`, { data: { observation: reason } }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['documents'] })
       await queryClient.invalidateQueries({ queryKey: ['document', String(document.id)] })
@@ -462,10 +464,18 @@ function AnnulDocumentModal({
     <Modal title={`Anular documento #${document.id}`} onClose={onClose}>
       <div className="grid">
         <p className="muted-text">Esta accion marcara el documento como ANULADO. El registro y sus archivos se conservaran para trazabilidad.</p>
+        <div className="field">
+          <label>Motivo de anulacion *</label>
+          <textarea
+            value={observation}
+            onChange={(event) => setObservation(event.target.value)}
+            placeholder="Ejemplo: documento duplicado, registro equivocado o archivo incorrecto."
+          />
+        </div>
         {error ? <div className="error">{error}</div> : null}
         <div className="header-actions" style={{ justifyContent: 'flex-end' }}>
           <button className="btn secondary" type="button" onClick={onClose}>Cancelar</button>
-          <button className="btn danger" type="button" disabled={mutation.isPending} onClick={() => mutation.mutate()}>
+          <button className="btn danger" type="button" disabled={reason.length < 3 || mutation.isPending} onClick={() => mutation.mutate()}>
             Anular
           </button>
         </div>

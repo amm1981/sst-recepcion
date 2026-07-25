@@ -252,11 +252,24 @@ class MedicalDocumentController extends Controller
     {
         abort_unless($request->user()->canDo('documents.annul'), 403);
 
+        $data = $request->validate([
+            'observation' => ['required_without:reason', 'nullable', 'string', 'min:3', 'max:1000'],
+            'reason' => ['required_without:observation', 'nullable', 'string', 'min:3', 'max:1000'],
+        ]);
+        $annulReason = trim((string) ($data['observation'] ?? $data['reason'] ?? ''));
+
+        if ($annulReason === '') {
+            throw ValidationException::withMessages([
+                'observation' => 'Debe ingresar el motivo de anulacion.',
+            ]);
+        }
+
         if ($medicalDocument->status !== MedicalDocument::STATUS_ANNULLED) {
-            DB::transaction(function () use ($request, $medicalDocument) {
+            DB::transaction(function () use ($request, $medicalDocument, $annulReason) {
                 $from = $medicalDocument->status;
                 $medicalDocument->update([
                     'status' => MedicalDocument::STATUS_ANNULLED,
+                    'observation' => $annulReason,
                     'status_changed_by' => $request->user()->id,
                     'status_changed_at' => now(),
                 ]);
@@ -265,13 +278,14 @@ class MedicalDocumentController extends Controller
                     'medical_document_id' => $medicalDocument->id,
                     'from_status' => $from,
                     'to_status' => MedicalDocument::STATUS_ANNULLED,
-                    'observation' => 'Documento anulado.',
+                    'observation' => $annulReason,
                     'changed_by' => $request->user()->id,
                 ]);
 
                 $this->audit($request, 'annulled', 'medical_documents', $medicalDocument->id, [
                     'from' => $from,
                     'to' => MedicalDocument::STATUS_ANNULLED,
+                    'reason' => $annulReason,
                 ]);
             });
         }

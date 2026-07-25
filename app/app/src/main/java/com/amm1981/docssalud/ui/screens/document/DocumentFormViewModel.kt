@@ -111,16 +111,41 @@ class DocumentFormViewModel @Inject constructor(
             val results = if (directResults.isNotEmpty()) directResults else searchWorkersNormalized(term)
             _state.value = if (worker != null) {
                 _state.value.copy(isLoading = false, selectedWorker = worker, workerResults = results, error = null)
-            } else if (results.isNotEmpty()) {
+            } else if (results.size == 1) {
                 _state.value.copy(isLoading = false, selectedWorker = results.first(), workerResults = results, error = null)
+            } else if (results.isNotEmpty()) {
+                _state.value.copy(isLoading = false, selectedWorker = null, workerResults = results, error = "Se encontraron varios trabajadores. Seleccione uno para continuar.")
             } else {
                 _state.value.copy(isLoading = false, selectedWorker = null, workerResults = emptyList(), error = "Trabajador no encontrado.")
             }
         }
     }
 
+    fun previewWorkers(query: String) {
+        viewModelScope.launch {
+            val term = query.trim()
+            if (term.length < 2) {
+                _state.value = _state.value.copy(workerResults = emptyList(), error = null)
+                return@launch
+            }
+
+            if (workerDao.count() == 0) {
+                syncRepository.syncAll(forceWorkers = true)
+            }
+
+            val exact = workerDao.findByDni(term)
+            val directResults = if (exact != null) listOf(exact) else workerDao.search(term)
+            val results = if (directResults.isNotEmpty()) directResults else searchWorkersNormalized(term)
+            _state.value = _state.value.copy(workerResults = results.take(8), error = null)
+        }
+    }
+
     fun selectWorker(worker: WorkerEntity) {
-        _state.value = _state.value.copy(selectedWorker = worker, error = null)
+        _state.value = _state.value.copy(selectedWorker = worker, workerResults = emptyList(), error = null)
+    }
+
+    fun clearWorkerSelection() {
+        _state.value = _state.value.copy(selectedWorker = null)
     }
 
     fun extractDateFromDocument(uri: Uri) {

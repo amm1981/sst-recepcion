@@ -12,6 +12,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -37,6 +40,7 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.amm1981.docssalud.data.local.entity.CatalogEntity
 import com.amm1981.docssalud.ui.theme.PrimaryGreen
+import kotlinx.coroutines.delay
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
@@ -200,6 +204,12 @@ fun DocumentFormScreen(
         }
     }
 
+    LaunchedEffect(dni, typeReady, state.selectedWorker?.dni) {
+        if (!typeReady || dni.trim().length < 2 || dni.trim() == state.selectedWorker?.dni) return@LaunchedEffect
+        delay(300)
+        viewModel.previewWorkers(dni)
+    }
+
     LaunchedEffect(state.extractedDateCandidates) {
         if (state.extractedDateCandidates.size == 1) {
             documentDate = state.extractedDateCandidates.first()
@@ -262,12 +272,22 @@ fun DocumentFormScreen(
             Row(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = dni,
-                    onValueChange = { dni = it.take(80) },
+                    onValueChange = {
+                        val next = it.take(80)
+                        dni = next
+                        if (state.selectedWorker != null && next.trim() != state.selectedWorker?.dni) {
+                            viewModel.clearWorkerSelection()
+                        }
+                    },
                     modifier = Modifier.weight(1f),
                     enabled = typeReady,
                     placeholder = { Text("DNI, nombre o apellidos") },
                     shape = RoundedCornerShape(8.dp),
-                    singleLine = true
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = { viewModel.searchWorker(dni) }
+                    )
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
@@ -281,9 +301,9 @@ fun DocumentFormScreen(
                 }
             }
 
-            if (state.workerResults.size > 1) {
+            if (state.workerResults.isNotEmpty() && state.selectedWorker == null) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.workerResults.take(5).forEach { result ->
+                    state.workerResults.take(8).forEach { result ->
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -297,6 +317,9 @@ fun DocumentFormScreen(
                             Column(modifier = Modifier.padding(12.dp)) {
                                 Text("${result.firstName} ${result.lastName}", fontWeight = FontWeight.SemiBold)
                                 Text("DNI: ${result.dni}", fontSize = 12.sp, color = Color.Gray)
+                                result.position?.let { Text(it, fontSize = 12.sp, color = Color.Gray) }
+                                val area = listOfNotNull(result.managementName, result.sectorName).joinToString(" / ")
+                                if (area.isNotBlank()) Text(area, fontSize = 12.sp, color = Color.Gray)
                             }
                         }
                     }
