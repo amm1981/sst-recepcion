@@ -13,8 +13,14 @@ interface WorkerDao {
     @Query("SELECT * FROM workers WHERE dni = :dni LIMIT 1")
     suspend fun findByDni(dni: String): WorkerEntity?
 
-    @Query("SELECT * FROM workers WHERE dni LIKE '%' || :query || '%' OR firstName LIKE '%' || :query || '%' OR lastName LIKE '%' || :query || '%' LIMIT 20")
+    @Query("SELECT * FROM workers WHERE dni LIKE '%' || :query || '%' OR firstName LIKE '%' || :query || '%' COLLATE NOCASE OR lastName LIKE '%' || :query || '%' COLLATE NOCASE LIMIT 20")
     suspend fun search(query: String): List<WorkerEntity>
+
+    @Query("SELECT * FROM workers")
+    suspend fun getAll(): List<WorkerEntity>
+
+    @Query("SELECT COUNT(*) FROM workers")
+    suspend fun count(): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(workers: List<WorkerEntity>)

@@ -420,6 +420,11 @@ tbody tr:hover { background: #f9fafb; }
 .search-input-integrated:focus-within { border-color: #047857; box-shadow: 0 0 0 1px #047857; }
 
 /* Worker Card */
+.worker-result-list { display: grid; gap: 8px; margin-top: 12px; }
+.worker-result-item { display: grid; gap: 4px; text-align: left; padding: 12px 14px; border: 1px solid #d1fae5; border-radius: 8px; background: #ffffff; color: #111827; cursor: pointer; }
+.worker-result-item:hover { border-color: #047857; background: #f0fdf4; }
+.worker-result-item span,
+.worker-result-item small { color: #4b5563; font-size: 12px; }
 .worker-card-styled { display: flex; align-items: center; gap: 16px; padding: 20px; background: #f0fdf4; border-radius: 12px; border: 1px solid #d1fae5; margin-top: 8px; }
 .worker-card-styled .avatar-large { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; background: #d1d5db; }
 .worker-card-styled .info { display: flex; flex-direction: column; gap: 4px; }

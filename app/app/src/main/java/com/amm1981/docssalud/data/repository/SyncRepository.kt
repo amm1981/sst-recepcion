@@ -43,7 +43,7 @@ class SyncRepository @Inject constructor(
             onProgress?.invoke(SyncProgress(5, "Preparando actualizacion..."))
             val catalogsResult = syncCatalogs()
             onProgress?.invoke(SyncProgress(35, "Catalogos actualizados."))
-            val workersResult = if (forceWorkers || shouldAutoSyncWorkers()) {
+            val workersResult = if (forceWorkers || shouldAutoSyncWorkers() || workerDao.count() == 0) {
                 onProgress?.invoke(SyncProgress(45, "Actualizando trabajadores..."))
                 syncWorkers().also {
                     if (it.isSuccess) onProgress?.invoke(SyncProgress(90, "Trabajadores actualizados."))

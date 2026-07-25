@@ -6,7 +6,7 @@ import { useForm, useWatch } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { api, getErrorMessage } from '../api/client'
-import type { Catalogs, MedicalDocument, MedicalDocumentType, Worker } from '../types'
+import type { Catalogs, MedicalDocument, MedicalDocumentType, Paginated, Worker } from '../types'
 
 const schema = z.object({
   medical_document_type_id: z.string().min(1, 'Seleccione el tipo'),
@@ -162,6 +162,7 @@ export function NewDocumentPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [worker, setWorker] = useState<Worker | null>(null)
+  const [workerResults, setWorkerResults] = useState<Worker[]>([])
   const [workerError, setWorkerError] = useState('')
   const [submitError, setSubmitError] = useState('')
   const [scanStatus, setScanStatus] = useState<'idle' | 'processing' | 'found' | 'multiple' | 'empty'>('idle')
@@ -226,21 +227,47 @@ export function NewDocumentPage() {
     return Array.from(fileList as FileList).map((f) => f.name).join(', ')
   }
 
+  function selectWorker(foundWorker: Worker) {
+    setWorker(foundWorker)
+    setWorkerResults([])
+    setWorkerError('')
+    form.setValue('worker_dni', foundWorker.dni, { shouldValidate: true })
+    form.setValue('contact_number', foundWorker.phone ?? '', { shouldValidate: true })
+    if (isWorkerRelation) {
+      form.setValue('deliverer_name', `${foundWorker.first_name} ${foundWorker.last_name}`.trim(), { shouldValidate: true })
+      form.setValue('deliverer_document', foundWorker.dni, { shouldValidate: true })
+    }
+  }
+
   async function searchWorker() {
     setWorker(null)
+    setWorkerResults([])
     setWorkerError('')
+    const query = form.getValues('worker_dni').trim()
+    if (query.length < 2) {
+      setWorkerError('Ingrese DNI, nombre o apellidos.')
+      return
+    }
     try {
-      const query = form.getValues('worker_dni').trim()
       const response = await api.get<Worker>(`/workers/search/${encodeURIComponent(query)}`)
-      setWorker(response.data)
-      form.setValue('worker_dni', response.data.dni, { shouldValidate: true })
-      form.setValue('contact_number', response.data.phone ?? '', { shouldValidate: true })
-      if (isWorkerRelation) {
-        form.setValue('deliverer_name', `${response.data.first_name} ${response.data.last_name}`.trim(), { shouldValidate: true })
-        form.setValue('deliverer_document', response.data.dni, { shouldValidate: true })
-      }
+      selectWorker(response.data)
     } catch {
-      setWorkerError('Trabajador no encontrado.')
+      try {
+        const response = await api.get<Paginated<Worker>>('/workers', {
+          params: { q: query, is_active: true, per_page: 10 },
+        })
+        const results = response.data.data ?? []
+        if (results.length === 1) {
+          selectWorker(results[0])
+        } else if (results.length > 1) {
+          setWorkerResults(results)
+          setWorkerError('Se encontraron varios trabajadores. Seleccione uno para continuar.')
+        } else {
+          setWorkerError('Trabajador no encontrado.')
+        }
+      } catch {
+        setWorkerError('Trabajador no encontrado.')
+      }
     }
   }
 
@@ -383,6 +410,18 @@ export function NewDocumentPage() {
             {form.formState.errors.worker_dni && <span className="error">{form.formState.errors.worker_dni.message}</span>}
           </div>
 
+          {workerResults.length > 1 && (
+            <div className="worker-result-list">
+              {workerResults.map((result) => (
+                <button key={result.id} type="button" className="worker-result-item" onClick={() => selectWorker(result)}>
+                  <strong>{result.first_name} {result.last_name}</strong>
+                  <span>DNI: {result.dni}</span>
+                  {result.position ? <small>{result.position}</small> : null}
+                </button>
+              ))}
+            </div>
+          )}
+
           {worker && (
             <div className="worker-card-styled">
               <img src={`https://ui-avatars.com/api/?name=${worker.first_name}+${worker.last_name}&background=e5e7eb&color=111827&bold=true`} alt="Avatar" className="avatar-large" />
@@ -427,7 +466,7 @@ export function NewDocumentPage() {
             <div className="field">
               <label>Fecha del documento *</label>
               <div className="input-with-icon" style={{ marginTop: 8 }}>
-                <input type="date" min={currentDateRange.min} max={currentDateRange.max} {...form.register('document_date')} disabled={!documentStepReady} />
+                <input type="date" min={currentDateRange.min} max={currentDateRange.max} {...form.register('document_date')} disabled={!workerStepReady} />
                 <CalendarCheck size={18} />
               </div>
               <div className="file-hint">Permitido: {currentDateRange.min} al {currentDateRange.max}.</div>

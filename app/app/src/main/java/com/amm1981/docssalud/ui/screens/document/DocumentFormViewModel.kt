@@ -88,14 +88,30 @@ class DocumentFormViewModel @Inject constructor(
                 _state.value = _state.value.copy(selectedWorker = null, workerResults = emptyList(), error = "Ingrese DNI, nombre o apellidos.")
                 return@launch
             }
+            _state.value = _state.value.copy(isLoading = true, error = null)
+
+            if (workerDao.count() == 0) {
+                val syncResult = syncRepository.syncAll(forceWorkers = true)
+                if (syncResult.isFailure && workerDao.count() == 0) {
+                    _state.value = _state.value.copy(
+                        isLoading = false,
+                        selectedWorker = null,
+                        workerResults = emptyList(),
+                        error = "No hay trabajadores sincronizados. Sincronice Data Maestra e intente nuevamente."
+                    )
+                    return@launch
+                }
+            }
+
             val worker = workerDao.findByDni(term)
-            val results = if (worker != null) listOf(worker) else workerDao.search(term)
+            val directResults = if (worker != null) listOf(worker) else workerDao.search(term)
+            val results = if (directResults.isNotEmpty()) directResults else searchWorkersNormalized(term)
             _state.value = if (worker != null) {
-                _state.value.copy(selectedWorker = worker, workerResults = results, error = null)
+                _state.value.copy(isLoading = false, selectedWorker = worker, workerResults = results, error = null)
             } else if (results.isNotEmpty()) {
-                _state.value.copy(selectedWorker = results.first(), workerResults = results, error = null)
+                _state.value.copy(isLoading = false, selectedWorker = results.first(), workerResults = results, error = null)
             } else {
-                _state.value.copy(selectedWorker = null, workerResults = emptyList(), error = "Trabajador no encontrado.")
+                _state.value.copy(isLoading = false, selectedWorker = null, workerResults = emptyList(), error = "Trabajador no encontrado.")
             }
         }
     }
@@ -244,5 +260,26 @@ class DocumentFormViewModel @Inject constructor(
             .replace(Regex("\\p{Mn}+"), "")
             .uppercase(Locale("es", "PE"))
         return if (normalized.contains("ATENCION")) 1 else 2
+    }
+
+    private suspend fun searchWorkersNormalized(term: String): List<WorkerEntity> {
+        val normalizedTerm = normalizeForSearch(term)
+        return workerDao.getAll()
+            .asSequence()
+            .filter { worker ->
+                normalizeForSearch(worker.dni).contains(normalizedTerm) ||
+                    normalizeForSearch(worker.firstName).contains(normalizedTerm) ||
+                    normalizeForSearch(worker.lastName).contains(normalizedTerm) ||
+                    normalizeForSearch("${worker.firstName} ${worker.lastName}").contains(normalizedTerm)
+            }
+            .take(20)
+            .toList()
+    }
+
+    private fun normalizeForSearch(value: String): String {
+        return Normalizer.normalize(value, Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "")
+            .uppercase(Locale("es", "PE"))
+            .trim()
     }
 }

@@ -74,6 +74,13 @@ fun DocumentFormScreen(
     val dateReady = documentReady && documentDate.isNotBlank() && documentDateError == null
     val deliveryReady = dateReady && selectedRelationId != null && delivererName.isNotBlank()
     val contactReady = deliveryReady && contactNumber.isNotBlank()
+    val currentStep = when {
+        !typeReady -> 1
+        !workerReady -> 2
+        !dateReady -> 3
+        !deliveryReady -> 4
+        else -> 5
+    }
 
     val delivererPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {
         if (it != null) {
@@ -204,7 +211,9 @@ fun DocumentFormScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Tipo de Documento", fontWeight = FontWeight.Medium)
+            GuidedProgress(currentStep = currentStep)
+
+            StepHeader("1", "Tipo de documento", "Seleccione el tipo para aplicar la regla de fecha correcta.", active = currentStep == 1, done = typeReady)
             CatalogSelector(
                 items = state.documentTypes,
                 selectedId = selectedTypeId,
@@ -213,7 +222,7 @@ fun DocumentFormScreen(
                 onSelected = { selectedTypeId = it.id }
             )
 
-            Text("Trabajador *", fontWeight = FontWeight.Medium)
+            StepHeader("2", "Trabajador", "Busque por DNI, nombre o apellidos y confirme el trabajador.", active = currentStep == 2, done = workerReady)
             Row(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = dni,
@@ -276,6 +285,7 @@ fun DocumentFormScreen(
                 }
             }
 
+            StepHeader("3", "Documento y fecha", "Adjunte el documento. Si no se detecta fecha, ingrese la fecha manualmente.", active = currentStep == 3, done = dateReady)
             PhotoUploadSection(
                 title = "Documento *",
                 selectedText = medicalDocumentUri?.lastPathSegment,
@@ -294,7 +304,7 @@ fun DocumentFormScreen(
                 label = { Text("Fecha del documento *") },
                 placeholder = { Text("AAAA-MM-DD") },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = documentReady,
+                enabled = workerReady,
                 shape = RoundedCornerShape(8.dp),
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) }
@@ -321,7 +331,7 @@ fun DocumentFormScreen(
                 Text(documentDateError, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
             }
 
-            Text("Relación de quien entrega *", fontWeight = FontWeight.Medium)
+            StepHeader("4", "Entrega", "Registre la relacion, los datos de quien entrega y su foto.", active = currentStep == 4, done = deliveryReady)
             CatalogSelector(
                 items = state.deliveryRelations,
                 selectedId = selectedRelationId,
@@ -381,6 +391,7 @@ fun DocumentFormScreen(
                 onAttach = { delivererPicker.launch(arrayOf("image/*")) }
             )
 
+            StepHeader("5", "Contacto y anexos", "Complete el numero de contacto y adjunte anexos si corresponde.", active = currentStep == 5, done = contactReady)
             OutlinedTextField(
                 value = contactNumber,
                 onValueChange = { contactNumber = it.filter(Char::isDigit).take(15) },
@@ -453,6 +464,65 @@ fun DocumentFormScreen(
                 } else {
                     Text("Guardar Registro", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuidedProgress(currentStep: Int) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Registro guiado", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            (1..5).forEach { step ->
+                val active = step == currentStep
+                val done = step < currentStep
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp),
+                    color = when {
+                        active -> PrimaryGreen
+                        done -> Color(0xFFE8F5E9)
+                        else -> Color(0xFFF3F4F6)
+                    }
+                ) {
+                    Text(
+                        text = step.toString(),
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        color = if (active) Color.White else if (done) PrimaryGreen else Color.Gray,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StepHeader(step: String, title: String, caption: String, active: Boolean, done: Boolean) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = if (active) Color(0xFFE8F5E9) else Color(0xFFF9FAFB)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(34.dp),
+                shape = RoundedCornerShape(17.dp),
+                color = if (active || done) PrimaryGreen else Color(0xFFE5E7EB)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(step, color = if (active || done) Color.White else Color.Gray, fontWeight = FontWeight.Bold)
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text(caption, color = Color.Gray, fontSize = 12.sp)
             }
         }
     }
