@@ -25,10 +25,16 @@ class BiDocumentController extends Controller
             ->latest('medical_documents.created_at')
             ->paginate($perPage);
 
+        $reportRows = $documents->getCollection()
+            ->map(fn (MedicalDocument $document) => $this->reportRow($document))
+            ->values();
+
         $documents->getCollection()->transform(fn (MedicalDocument $document) => $this->documentPayload($document));
 
         return response()->json([
+            'columns' => $this->readableColumns(),
             'data' => $documents->items(),
+            'report_rows' => $reportRows,
             'meta' => [
                 'current_page' => $documents->currentPage(),
                 'per_page' => $documents->perPage(),
@@ -60,6 +66,8 @@ class BiDocumentController extends Controller
             'document_number' => 'DOC-' . str_pad((string) $document->id, 6, '0', STR_PAD_LEFT),
             'registered_at' => optional($document->created_at)->toISOString(),
             'registered_at_local' => optional($document->created_at)->timezone('America/Lima')->format('Y-m-d H:i:s'),
+            'document_date' => optional($document->document_date)->format('Y-m-d'),
+            'document_date_display' => optional($document->document_date)->format('d/m/Y'),
             'updated_at' => optional($document->updated_at)->toISOString(),
             'document_type' => [
                 'id' => $document->type?->id,
@@ -131,6 +139,73 @@ class BiDocumentController extends Controller
                     'email' => $history->user?->email,
                 ],
             ])->values(),
+        ];
+    }
+
+    private function readableColumns(): array
+    {
+        return [
+            ['key' => 'ID Documento', 'label' => 'ID Documento'],
+            ['key' => 'Numero Documento', 'label' => 'Numero Documento'],
+            ['key' => 'Fecha Registro', 'label' => 'Fecha Registro'],
+            ['key' => 'Fecha del Documento', 'label' => 'Fecha del Documento'],
+            ['key' => 'Usuario Registrador', 'label' => 'Usuario Registrador'],
+            ['key' => 'Correo Registrador', 'label' => 'Correo Registrador'],
+            ['key' => 'Tipo de Documento', 'label' => 'Tipo de Documento'],
+            ['key' => 'Estado', 'label' => 'Estado'],
+            ['key' => 'Motivo de Rechazo', 'label' => 'Motivo de Rechazo'],
+            ['key' => 'DNI Trabajador', 'label' => 'DNI Trabajador'],
+            ['key' => 'Nombre Trabajador', 'label' => 'Nombre Trabajador'],
+            ['key' => 'Correo Trabajador', 'label' => 'Correo Trabajador'],
+            ['key' => 'Telefono Trabajador', 'label' => 'Telefono Trabajador'],
+            ['key' => 'Cargo', 'label' => 'Cargo'],
+            ['key' => 'Area/Gerencia', 'label' => 'Area/Gerencia'],
+            ['key' => 'Sector', 'label' => 'Sector'],
+            ['key' => 'Fundo', 'label' => 'Fundo'],
+            ['key' => 'Relacion Entrega', 'label' => 'Relacion Entrega'],
+            ['key' => 'Detalle Relacion', 'label' => 'Detalle Relacion'],
+            ['key' => 'Nombre Entregante', 'label' => 'Nombre Entregante'],
+            ['key' => 'Documento Entregante', 'label' => 'Documento Entregante'],
+            ['key' => 'Contacto', 'label' => 'Contacto'],
+            ['key' => 'Observacion', 'label' => 'Observacion'],
+            ['key' => 'Cantidad Archivos', 'label' => 'Cantidad Archivos'],
+        ];
+    }
+
+    private function reportRow(MedicalDocument $document): array
+    {
+        $worker = $document->worker;
+        $payload = is_array($worker?->external_payload) ? $worker->external_payload : [];
+        $workerName = trim((string) ($worker?->first_name ?? '') . ' ' . (string) ($worker?->last_name ?? ''));
+        $rejectionReason = $document->history
+            ->firstWhere('to_status', MedicalDocument::STATUS_REJECTED)
+            ?->observation;
+
+        return [
+            'ID Documento' => $document->id,
+            'Numero Documento' => 'DOC-' . str_pad((string) $document->id, 6, '0', STR_PAD_LEFT),
+            'Fecha Registro' => optional($document->created_at)->timezone('America/Lima')->format('d/m/Y H:i'),
+            'Fecha del Documento' => optional($document->document_date)->format('d/m/Y'),
+            'Usuario Registrador' => $document->creator?->name,
+            'Correo Registrador' => $document->creator?->email,
+            'Tipo de Documento' => $document->type?->name,
+            'Estado' => $document->status,
+            'Motivo de Rechazo' => $rejectionReason,
+            'DNI Trabajador' => $worker?->dni,
+            'Nombre Trabajador' => $workerName !== '' ? $workerName : null,
+            'Correo Trabajador' => $worker?->email,
+            'Telefono Trabajador' => $worker?->phone,
+            'Cargo' => $document->worker_position_snapshot ?? $worker?->position,
+            'Area/Gerencia' => $document->worker_management_name_snapshot ?? $payload['area_desc'] ?? $worker?->management?->name,
+            'Sector' => $document->worker_sector_name_snapshot ?? $worker?->sector?->name,
+            'Fundo' => $payload['fundo'] ?? $payload['sede'] ?? $document->worker_sector_name_snapshot ?? $worker?->sector?->name,
+            'Relacion Entrega' => $document->deliveryRelation?->name,
+            'Detalle Relacion' => $document->delivery_relation_detail,
+            'Nombre Entregante' => $document->deliverer_name,
+            'Documento Entregante' => $document->deliverer_document,
+            'Contacto' => $document->contact_number,
+            'Observacion' => $document->observation,
+            'Cantidad Archivos' => $document->files->count(),
         ];
     }
 }

@@ -389,11 +389,18 @@ class ApiEndpointsTest extends TestCase
             ->assertOk()
             ->assertJsonPath('meta.total', 2)
             ->assertJsonPath('meta.per_page', 1)
+            ->assertJsonPath('columns.3.label', 'Fecha del Documento')
+            ->assertJsonPath('data.0.document_date', $rejectedFixtures['document_date'])
+            ->assertJsonPath('data.0.document_date_display', now('America/Lima')->format('d/m/Y'))
+            ->assertJsonPath('report_rows.0.Fecha del Documento', now('America/Lima')->format('d/m/Y'))
             ->assertJsonStructure([
+                'columns' => [['key', 'label']],
                 'data' => [[
                     'document_id',
                     'document_number',
                     'registered_at',
+                    'document_date',
+                    'document_date_display',
                     'document_type' => ['id', 'name', 'code'],
                     'status',
                     'registrar' => ['id', 'user', 'name', 'email'],
@@ -402,6 +409,13 @@ class ApiEndpointsTest extends TestCase
                     'delivery' => ['relation_id', 'relation', 'relation_detail', 'deliverer_name', 'deliverer_document', 'contact_number'],
                     'files' => ['count', 'items'],
                     'status_history',
+                ]],
+                'report_rows' => [[
+                    'ID Documento',
+                    'Fecha Registro',
+                    'Fecha del Documento',
+                    'Tipo de Documento',
+                    'Estado',
                 ]],
                 'meta' => ['current_page', 'per_page', 'last_page', 'total'],
                 'links' => ['first', 'last', 'prev', 'next'],

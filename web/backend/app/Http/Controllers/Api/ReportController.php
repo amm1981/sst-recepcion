@@ -321,6 +321,7 @@ class ReportController extends Controller
         $headers = [
             'ID Documento',
             'Fecha registro',
+            'Fecha del documento',
             'Usuario registrador',
             'Usuario registrador correo',
             'Tipo de documento',
@@ -380,6 +381,7 @@ class ReportController extends Controller
             $values = [
                 $document->id,
                 optional($document->created_at)->format('d/m/Y H:i'),
+                optional($document->document_date)->format('d/m/Y'),
                 $document->creator?->name,
                 $document->creator?->email,
                 $document->type?->name,
@@ -409,7 +411,7 @@ class ReportController extends Controller
             foreach ($values as $index => $value) {
                 $sheet->setCellValue([$index + 1, $row], $value);
             }
-            $sheet->getStyle("A{$row}:Z{$row}")->getAlignment()->setWrapText(true);
+            $sheet->getStyle("A{$row}:AA{$row}")->getAlignment()->setWrapText(true);
             $row++;
         }
 
@@ -589,6 +591,8 @@ class ReportController extends Controller
                 'id' => $document->id,
                 'status' => $document->status,
                 'created_at' => $document->created_at,
+                'document_date' => optional($document->document_date)->toDateString(),
+                'document_date_display' => optional($document->document_date)->format('d/m/Y'),
                 'type' => $document->type,
                 'creator' => $document->creator,
                 'history' => $document->history->map(fn ($history) => [

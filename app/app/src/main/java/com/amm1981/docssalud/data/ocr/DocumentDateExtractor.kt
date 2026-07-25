@@ -26,25 +26,44 @@ data class DocumentDateExtractionResult(
 class DocumentDateExtractor @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val outputFormatter = DateTimeFormatter.ISO_LOCAL_DATE
-    private val numericDate = Regex("""\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b""")
-    private val writtenDate = Regex(
-        """\b(\d{1,2})\s+DE\s+(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SETIEMBRE|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\s+(?:DE|DEL)?\s*(\d{2,4})\b"""
+    private val outputFormatter = DateTimeFormatter.ofPattern("dd-MM-uuuu")
+    private val separatedNumericDate = Regex("""(?<!\d)(\d{1,4})\s*[/.\-]\s*(\d{1,2})\s*[/.\-]\s*(\d{2,4})(?!\d)""")
+    private val spacedNumericDate = Regex("""(?<!\d)(\d{1,2})\s+(\d{1,2})\s+(\d{4})(?!\d)""")
+    private val compactNumericDate = Regex("""(?<!\d)(\d{2})(\d{2})(\d{4})(?!\d)""")
+    private val monthNames = "ENERO|ENE|FEBRERO|FEB|MARZO|MAR|ABRIL|ABR|MAYO|MAY|JUNIO|JUN|JULIO|JUL|AGOSTO|AGO|SETIEMBRE|SEPTIEMBRE|SET|SEP|OCTUBRE|OCT|NOVIEMBRE|NOV|DICIEMBRE|DIC"
+    private val writtenDayMonthYear = Regex(
+        """\b(\d{1,2})\s*(?:(?:DIA|DIAS)\s+)?(?:(?:DE|DEL)\s+)?(?:(?:MES)\s+DE\s+)?($monthNames)\s*(?:(?:DE|DEL)\s+)?(?:ANO\s+)?(\d{2,4})\b"""
+    )
+    private val writtenMonthDayYear = Regex(
+        """\b($monthNames)\s+(\d{1,2})\s*(?:(?:DE|DEL)\s+)?(?:ANO\s+)?(\d{2,4})\b"""
     )
     private val months = mapOf(
         "ENERO" to 1,
+        "ENE" to 1,
         "FEBRERO" to 2,
+        "FEB" to 2,
         "MARZO" to 3,
+        "MAR" to 3,
         "ABRIL" to 4,
+        "ABR" to 4,
         "MAYO" to 5,
+        "MAY" to 5,
         "JUNIO" to 6,
+        "JUN" to 6,
         "JULIO" to 7,
+        "JUL" to 7,
         "AGOSTO" to 8,
+        "AGO" to 8,
         "SETIEMBRE" to 9,
         "SEPTIEMBRE" to 9,
+        "SET" to 9,
+        "SEP" to 9,
         "OCTUBRE" to 10,
+        "OCT" to 10,
         "NOVIEMBRE" to 11,
-        "DICIEMBRE" to 12
+        "NOV" to 11,
+        "DICIEMBRE" to 12,
+        "DIC" to 12
     )
 
     suspend fun extract(uri: Uri): DocumentDateExtractionResult {
@@ -78,10 +97,15 @@ class DocumentDateExtractor @Inject constructor(
     }
 
     private fun extractDates(text: String): List<String> {
-        val normalized = normalize(text)
+        val normalized = normalizeText(text)
+        val numericText = normalizeNumericText(text)
         val dates = linkedSetOf<String>()
 
-        numericDate.findAll(normalized).forEach { match ->
+        separatedNumericDate.findAll(numericText).forEach { match ->
+            parseSeparatedDate(match.groupValues[1], match.groupValues[2], match.groupValues[3])?.let(dates::add)
+        }
+
+        spacedNumericDate.findAll(numericText).forEach { match ->
             parseDate(
                 day = match.groupValues[1].toIntOrNull(),
                 month = match.groupValues[2].toIntOrNull(),
@@ -89,7 +113,15 @@ class DocumentDateExtractor @Inject constructor(
             )?.let(dates::add)
         }
 
-        writtenDate.findAll(normalized).forEach { match ->
+        compactNumericDate.findAll(numericText).forEach { match ->
+            parseDate(
+                day = match.groupValues[1].toIntOrNull(),
+                month = match.groupValues[2].toIntOrNull(),
+                year = normalizeYear(match.groupValues[3])
+            )?.let(dates::add)
+        }
+
+        writtenDayMonthYear.findAll(normalized).forEach { match ->
             parseDate(
                 day = match.groupValues[1].toIntOrNull(),
                 month = months[match.groupValues[2]],
@@ -97,16 +129,42 @@ class DocumentDateExtractor @Inject constructor(
             )?.let(dates::add)
         }
 
+        writtenMonthDayYear.findAll(normalized).forEach { match ->
+            parseDate(
+                day = match.groupValues[2].toIntOrNull(),
+                month = months[match.groupValues[1]],
+                year = normalizeYear(match.groupValues[3])
+            )?.let(dates::add)
+        }
+
         return dates.toList()
+    }
+
+    private fun parseSeparatedDate(first: String, second: String, third: String): String? {
+        return if (first.length == 4) {
+            parseDate(
+                day = third.toIntOrNull(),
+                month = second.toIntOrNull(),
+                year = normalizeYear(first)
+            )
+        } else {
+            parseDate(
+                day = first.toIntOrNull(),
+                month = second.toIntOrNull(),
+                year = normalizeYear(third)
+            )
+        }
     }
 
     private fun parseDate(day: Int?, month: Int?, year: Int?): String? {
         if (day == null || month == null || year == null) return null
+        if (year !in 2000..LocalDate.now().year) return null
         return runCatching { LocalDate.of(year, month, day).format(outputFormatter) }.getOrNull()
     }
 
     private fun normalizeYear(value: String): Int? {
         val year = value.toIntOrNull() ?: return null
+        if (value.length == 4 && year < 1000) return null
         return if (value.length == 2) 2000 + year else year
     }
 
@@ -127,9 +185,18 @@ class DocumentDateExtractor @Inject constructor(
         }
     }
 
-    private fun normalize(value: String): String {
+    private fun normalizeText(value: String): String {
         return Normalizer.normalize(value, Normalizer.Form.NFD)
             .replace(Regex("\\p{Mn}+"), "")
             .uppercase(Locale("es", "PE"))
+    }
+
+    private fun normalizeNumericText(value: String): String {
+        return normalizeText(value)
+            .replace('O', '0')
+            .replace('Q', '0')
+            .replace('I', '1')
+            .replace('L', '1')
+            .replace('|', '1')
     }
 }

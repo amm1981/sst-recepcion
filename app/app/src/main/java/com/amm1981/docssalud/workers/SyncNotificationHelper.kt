@@ -83,7 +83,8 @@ object SyncNotificationHelper {
 
     private fun baseBuilder(context: Context, title: String, text: String): NotificationCompat.Builder {
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(ContextCompat.getColor(context, R.color.green_primary))
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))

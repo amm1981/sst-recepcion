@@ -60,6 +60,8 @@ function formatDateInput(date: Date) {
 
 function parseDateCandidate(day: string, month: string, year: string) {
   const fullYear = year.length === 2 ? Number(`20${year}`) : Number(year)
+  const currentYear = new Date().getFullYear()
+  if (fullYear < 2000 || fullYear > currentYear) return null
   const date = new Date(fullYear, Number(month) - 1, Number(day))
   if (date.getFullYear() !== fullYear || date.getMonth() !== Number(month) - 1 || date.getDate() !== Number(day)) return null
   return formatDateInput(date)
@@ -91,6 +93,13 @@ function validateDocumentDateForType(value: string, type?: MedicalDocumentType |
     return `La fecha debe estar entre ${min} y ${max} para este tipo de documento (${label}).`
   }
   return null
+}
+
+function formatDisplayDate(value: string) {
+  if (!value) return ''
+  const [year, month, day] = value.split('-')
+  if (!year || !month || !day) return value
+  return `${day}-${month}-${year}`
 }
 
 function validateDocumentFile(file: File) {
@@ -470,6 +479,7 @@ export function NewDocumentPage() {
                 <CalendarCheck size={18} />
               </div>
               <div className="file-hint">Permitido: {currentDateRange.min} al {currentDateRange.max}.</div>
+              {documentDate ? <div className="selected-date-label">Fecha seleccionada: {formatDisplayDate(documentDate)}</div> : null}
               {dateCandidates.length > 1 ? (
                 <div className="date-candidate-list">
                   {dateCandidates.map((candidate) => (

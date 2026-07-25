@@ -19,6 +19,7 @@ import kotlinx.coroutines.launch
 import java.text.Normalizer
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.format.ResolverStyle
 import java.util.Locale
 import javax.inject.Inject
 
@@ -45,6 +46,8 @@ class DocumentFormViewModel @Inject constructor(
     private val documentSyncScheduler: DocumentSyncScheduler,
     private val documentDateExtractor: DocumentDateExtractor
 ) : ViewModel() {
+    private val displayDateFormatter = DateTimeFormatter.ofPattern("dd-MM-uuuu").withResolverStyle(ResolverStyle.STRICT)
+    private val apiDateFormatter = DateTimeFormatter.ISO_LOCAL_DATE
 
     private val _state = MutableStateFlow(DocumentFormState())
     val state: StateFlow<DocumentFormState> = _state.asStateFlow()
@@ -164,6 +167,7 @@ class DocumentFormViewModel @Inject constructor(
         val worker = _state.value.selectedWorker
         val documentType = _state.value.documentTypes.firstOrNull { it.id == documentTypeId }
         val relation = _state.value.deliveryRelations.firstOrNull { it.id == deliveryRelationId }
+        val parsedDocumentDate = parseDisplayDate(documentDate)
         val documentDateError = validateDocumentDate(documentDate, documentType)
 
         when {
@@ -217,7 +221,7 @@ class DocumentFormViewModel @Inject constructor(
                 workerManagementNameSnapshot = worker.managementName,
                 workerSectorIdSnapshot = worker.sectorId,
                 workerSectorNameSnapshot = worker.sectorName,
-                documentDate = documentDate,
+                documentDate = parsedDocumentDate?.format(apiDateFormatter) ?: documentDate,
                 deliveryRelationId = relation.id,
                 deliveryRelationDetail = deliveryRelationDetail?.takeIf { it.isNotBlank() },
                 delivererName = delivererName,
@@ -243,16 +247,20 @@ class DocumentFormViewModel @Inject constructor(
 
     fun validateDocumentDate(documentDate: String, documentType: CatalogEntity?): String? {
         if (documentDate.isBlank()) return "Ingrese la fecha del documento."
-        val parsed = runCatching { LocalDate.parse(documentDate, DateTimeFormatter.ISO_LOCAL_DATE) }.getOrNull()
-            ?: return "Ingrese una fecha valida."
+        val parsed = parseDisplayDate(documentDate) ?: return "Ingrese una fecha valida en formato dd-mm-aaaa."
         val today = LocalDate.now()
         val minDate = today.minusDays(allowedPastDays(documentType).toLong())
         return if (parsed.isBefore(minDate) || parsed.isAfter(today)) {
             val label = if (allowedPastDays(documentType) == 1) "1 dia anterior" else "${allowedPastDays(documentType)} dias anteriores"
-            "La fecha debe estar entre ${minDate.format(DateTimeFormatter.ISO_LOCAL_DATE)} y ${today.format(DateTimeFormatter.ISO_LOCAL_DATE)} para este tipo de documento ($label)."
+            "La fecha debe estar entre ${minDate.format(displayDateFormatter)} y ${today.format(displayDateFormatter)} para este tipo de documento ($label)."
         } else {
             null
         }
+    }
+
+    private fun parseDisplayDate(value: String): LocalDate? {
+        val clean = value.trim().replace('/', '-')
+        return runCatching { LocalDate.parse(clean, displayDateFormatter) }.getOrNull()
     }
 
     private fun allowedPastDays(documentType: CatalogEntity?): Int {

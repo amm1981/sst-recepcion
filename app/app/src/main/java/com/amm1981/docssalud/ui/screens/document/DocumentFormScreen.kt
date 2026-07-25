@@ -38,6 +38,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.amm1981.docssalud.data.local.entity.CatalogEntity
 import com.amm1981.docssalud.ui.theme.PrimaryGreen
 import java.io.File
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
+import java.time.format.ResolverStyle
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +69,7 @@ fun DocumentFormScreen(
     var cameraOutputUri by remember { mutableStateOf<Uri?>(null) }
     var pendingCameraTarget by remember { mutableStateOf<PhotoTarget?>(null) }
     var localError by remember { mutableStateOf<String?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
     val selectedType = state.documentTypes.firstOrNull { it.id == selectedTypeId }
     val selectedRelation = state.deliveryRelations.firstOrNull { it.id == selectedRelationId }
     val isWorkerRelation = selectedRelation?.code == "TRABAJADOR" || selectedRelation?.name.equals("Trabajador", ignoreCase = true)
@@ -150,6 +156,35 @@ fun DocumentFormScreen(
         }
     }
 
+    if (showDatePicker) {
+        val initialDateMillis = documentDate.toDatePickerMillis() ?: LocalDate.now().toDatePickerMillis()
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialDateMillis)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { documentDate = it.toDisplayDate() }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("Aceptar")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancelar")
+                }
+            }
+        ) {
+            DatePicker(
+                state = datePickerState,
+                title = { Text("Seleccione fecha del documento", modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp)) },
+                headline = { Text(datePickerState.selectedDateMillis?.toDisplayDate() ?: "Sin fecha", modifier = Modifier.padding(horizontal = 24.dp)) }
+            )
+        }
+    }
+
     LaunchedEffect(Unit) {
         viewModel.loadInitialData()
     }
@@ -222,6 +257,7 @@ fun DocumentFormScreen(
                 onSelected = { selectedTypeId = it.id }
             )
 
+            if (typeReady) {
             StepHeader("2", "Trabajador", "Busque por DNI, nombre o apellidos y confirme el trabajador.", active = currentStep == 2, done = workerReady)
             Row(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
@@ -284,7 +320,9 @@ fun DocumentFormScreen(
                     }
                 }
             }
+            }
 
+            if (workerReady) {
             StepHeader("3", "Documento y fecha", "Adjunte el documento. Si no se detecta fecha, ingrese la fecha manualmente.", active = currentStep == 3, done = dateReady)
             PhotoUploadSection(
                 title = "Documento *",
@@ -298,17 +336,23 @@ fun DocumentFormScreen(
                 fontSize = 12.sp,
                 color = Color.Gray
             )
-            OutlinedTextField(
-                value = documentDate,
-                onValueChange = { documentDate = it.take(10) },
-                label = { Text("Fecha del documento *") },
-                placeholder = { Text("AAAA-MM-DD") },
-                modifier = Modifier.fillMaxWidth(),
+            OutlinedButton(
+                onClick = { showDatePicker = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(58.dp),
                 enabled = workerReady,
-                shape = RoundedCornerShape(8.dp),
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) }
-            )
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Icon(Icons.Default.CalendarToday, contentDescription = null, tint = if (workerReady) PrimaryGreen else Color.Gray)
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = documentDate.ifBlank { "Seleccionar fecha del documento" },
+                    color = if (documentDate.isBlank()) Color.Gray else Color.Black,
+                    fontSize = 15.sp,
+                    fontWeight = if (documentDate.isBlank()) FontWeight.Normal else FontWeight.SemiBold
+                )
+            }
             state.dateExtractionMessage?.let {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (state.isExtractingDate) {
@@ -330,7 +374,9 @@ fun DocumentFormScreen(
             if (documentDateError != null && documentDate.isNotBlank()) {
                 Text(documentDateError, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
             }
+            }
 
+            if (dateReady) {
             StepHeader("4", "Entrega", "Registre la relacion, los datos de quien entrega y su foto.", active = currentStep == 4, done = deliveryReady)
             CatalogSelector(
                 items = state.deliveryRelations,
@@ -390,7 +436,9 @@ fun DocumentFormScreen(
                 onCamera = { openCamera(PhotoTarget.Dni) },
                 onAttach = { delivererPicker.launch(arrayOf("image/*")) }
             )
+            }
 
+            if (deliveryReady) {
             StepHeader("5", "Contacto y anexos", "Complete el numero de contacto y adjunte anexos si corresponde.", active = currentStep == 5, done = contactReady)
             OutlinedTextField(
                 value = contactNumber,
@@ -431,38 +479,41 @@ fun DocumentFormScreen(
             annexUris.forEachIndexed { index, uri ->
                 Text("Anexo ${index + 1}: ${uri.lastPathSegment}", fontSize = 12.sp, color = Color.Gray)
             }
+            }
 
             (localError ?: state.error)?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, fontSize = 13.sp)
             }
 
-            Button(
-                onClick = {
-                    viewModel.saveDocument(
-                        documentTypeId = selectedTypeId,
-                        documentDate = documentDate,
-                        deliveryRelationId = selectedRelationId,
-                        deliveryRelationDetail = deliveryRelationDetail,
-                        delivererName = delivererName,
-                        delivererDocument = delivererDocument,
-                        contactNumber = contactNumber,
-                        observation = observation,
-                        delivererPhotoUri = delivererPhotoUri,
-                        medicalDocumentUri = medicalDocumentUri,
-                        annexUris = annexUris
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
-                shape = RoundedCornerShape(8.dp),
-                enabled = contactReady && !state.isLoading && !state.isSaving
-            ) {
-                if (state.isSaving) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                } else {
-                    Text("Guardar Registro", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            if (deliveryReady) {
+                Button(
+                    onClick = {
+                        viewModel.saveDocument(
+                            documentTypeId = selectedTypeId,
+                            documentDate = documentDate,
+                            deliveryRelationId = selectedRelationId,
+                            deliveryRelationDetail = deliveryRelationDetail,
+                            delivererName = delivererName,
+                            delivererDocument = delivererDocument,
+                            contactNumber = contactNumber,
+                            observation = observation,
+                            delivererPhotoUri = delivererPhotoUri,
+                            medicalDocumentUri = medicalDocumentUri,
+                            annexUris = annexUris
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
+                    shape = RoundedCornerShape(8.dp),
+                    enabled = contactReady && !state.isLoading && !state.isSaving
+                ) {
+                    if (state.isSaving) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                    } else {
+                        Text("Guardar Registro", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -471,28 +522,40 @@ fun DocumentFormScreen(
 
 @Composable
 private fun GuidedProgress(currentStep: Int) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Registro guiado", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Registro guiado", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+            Text("Paso $currentStep de 5", color = PrimaryGreen, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             (1..5).forEach { step ->
                 val active = step == currentStep
                 val done = step < currentStep
                 Surface(
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.size(if (active) 34.dp else 28.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = when {
                         active -> PrimaryGreen
                         done -> Color(0xFFE8F5E9)
                         else -> Color(0xFFF3F4F6)
                     }
                 ) {
-                    Text(
-                        text = step.toString(),
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        color = if (active) Color.White else if (done) PrimaryGreen else Color.Gray,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = step.toString(),
+                            color = if (active) Color.White else if (done) PrimaryGreen else Color.Gray,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             }
         }
@@ -507,19 +570,19 @@ private fun StepHeader(step: String, title: String, caption: String, active: Boo
         color = if (active) Color(0xFFE8F5E9) else Color(0xFFF9FAFB)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                modifier = Modifier.size(34.dp),
-                shape = RoundedCornerShape(17.dp),
+                modifier = Modifier.size(30.dp),
+                shape = RoundedCornerShape(15.dp),
                 color = if (active || done) PrimaryGreen else Color(0xFFE5E7EB)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(step, color = if (active || done) Color.White else Color.Gray, fontWeight = FontWeight.Bold)
                 }
             }
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
             Column {
                 Text(title, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Text(caption, color = Color.Gray, fontSize = 12.sp)
@@ -648,6 +711,24 @@ private fun documentMimeTypes(): Array<String> = arrayOf(
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 )
+
+private val dateDisplayFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("dd-MM-uuuu").withResolverStyle(ResolverStyle.STRICT)
+
+private fun String.toDatePickerMillis(): Long? {
+    val clean = trim().replace('/', '-')
+    return runCatching {
+        LocalDate.parse(clean, dateDisplayFormatter).toDatePickerMillis()
+    }.getOrNull()
+}
+
+private fun Long.toDisplayDate(): String {
+    return Instant.ofEpochMilli(this).atZone(ZoneOffset.UTC).toLocalDate().format(dateDisplayFormatter)
+}
+
+private fun LocalDate.toDatePickerMillis(): Long {
+    return atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+}
 
 private fun Context.persistReadPermission(uri: Uri) {
     try {

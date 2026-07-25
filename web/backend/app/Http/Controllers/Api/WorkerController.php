@@ -292,6 +292,8 @@ class WorkerController extends Controller
                 'id' => $document->id,
                 'status' => $document->status,
                 'created_at' => $document->created_at,
+                'document_date' => optional($document->document_date)->toDateString(),
+                'document_date_display' => optional($document->document_date)->format('d/m/Y'),
                 'type' => $document->type,
                 'delivery_relation' => $document->deliveryRelation,
                 'delivery_relation_detail' => $document->delivery_relation_detail,
