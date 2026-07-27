@@ -89,8 +89,9 @@ function validateDocumentDateForType(value: string, type?: MedicalDocumentType |
   const { min, max } = allowedDateRange(type)
   if (value < min || value > max) {
     const days = documentTypePastDays(type)
-    const label = days === 1 ? '1 dia anterior' : `${days} dias anteriores`
-    return `La fecha debe estar entre ${min} y ${max} para este tipo de documento (${label}).`
+    return days === 1
+      ? 'Fecha no válida. La atención médica solo se puede registrar dentro de las últimas 24 horas.'
+      : 'Fecha no válida. El descanso médico solo se puede registrar dentro de las últimas 48 horas.'
   }
   return null
 }

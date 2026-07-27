@@ -276,8 +276,11 @@ class DocumentFormViewModel @Inject constructor(
         val today = LocalDate.now()
         val minDate = today.minusDays(allowedPastDays(documentType).toLong())
         return if (parsed.isBefore(minDate) || parsed.isAfter(today)) {
-            val label = if (allowedPastDays(documentType) == 1) "1 dia anterior" else "${allowedPastDays(documentType)} dias anteriores"
-            "La fecha debe estar entre ${minDate.format(displayDateFormatter)} y ${today.format(displayDateFormatter)} para este tipo de documento ($label)."
+            if (allowedPastDays(documentType) == 1) {
+                "Fecha no válida. La atención médica solo se puede registrar dentro de las últimas 24 horas."
+            } else {
+                "Fecha no válida. El descanso médico solo se puede registrar dentro de las últimas 48 horas."
+            }
         } else {
             null
         }

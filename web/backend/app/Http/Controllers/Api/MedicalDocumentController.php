@@ -477,9 +477,11 @@ class MedicalDocumentController extends Controller
         $minDate = $today->copy()->subDays($allowedPastDays);
 
         if ($date->lt($minDate) || $date->gt($today)) {
-            $label = $allowedPastDays === 1 ? '1 dia anterior' : "{$allowedPastDays} dias anteriores";
+            $message = $allowedPastDays === 1
+                ? 'Fecha no valida. La atencion medica solo se puede registrar dentro de las ultimas 24 horas.'
+                : 'Fecha no valida. El descanso medico solo se puede registrar dentro de las ultimas 48 horas.';
             throw ValidationException::withMessages([
-                'document_date' => "La fecha del documento debe estar entre {$minDate->format('d/m/Y')} y {$today->format('d/m/Y')} para {$type->name} ({$label}).",
+                'document_date' => $message,
             ]);
         }
     }
