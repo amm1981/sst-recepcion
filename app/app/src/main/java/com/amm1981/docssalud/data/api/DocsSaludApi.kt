@@ -1,6 +1,7 @@
 package com.amm1981.docssalud.data.api
 
 import com.google.gson.annotations.SerializedName
+import com.google.gson.JsonObject
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Response
@@ -47,6 +48,9 @@ interface DocsSaludApi {
 
     @GET("medical-documents/counts")
     suspend fun getCounts(): Response<DocumentCountsDto>
+
+    @GET("notifications")
+    suspend fun getNotifications(): Response<List<AppNotificationDto>>
 
     @GET("medical-documents/{id}")
     suspend fun getDocument(@Path("id") id: Int): Response<MedicalDocumentDto>
@@ -141,6 +145,15 @@ data class DocumentCountsDto(
     val received: Int,
     val registered: Int,
     val rejected: Int
+)
+
+data class AppNotificationDto(
+    val id: Int,
+    val title: String,
+    val body: String,
+    val data: JsonObject? = null,
+    @SerializedName("read_at") val readAt: String? = null,
+    @SerializedName("created_at") val createdAt: String? = null
 )
 
 data class MedicalDocumentDto(

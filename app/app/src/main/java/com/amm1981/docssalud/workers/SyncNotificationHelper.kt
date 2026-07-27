@@ -19,8 +19,10 @@ import com.amm1981.docssalud.R
 
 object SyncNotificationHelper {
     private const val CHANNEL_ID = "document_sync"
+    private const val ALERT_CHANNEL_ID = "document_alerts"
     private const val FOREGROUND_NOTIFICATION_ID = 3101
     private const val RESULT_NOTIFICATION_ID = 3102
+    private const val REJECTED_NOTIFICATION_BASE_ID = 4200
 
     fun foregroundInfo(
         context: Context,
@@ -69,6 +71,25 @@ object SyncNotificationHelper {
         showResult(context, "Error al subir documentos", text)
     }
 
+    fun showDocumentRejected(context: Context, notificationId: Int, title: String, text: String) {
+        ensureAlertChannel(context)
+        if (!canPostNotifications(context)) return
+
+        NotificationManagerCompat.from(context).notify(
+            REJECTED_NOTIFICATION_BASE_ID + notificationId,
+            NotificationCompat.Builder(context, ALERT_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setColor(ContextCompat.getColor(context, R.color.green_primary))
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setContentIntent(openAppIntent(context))
+                .build()
+        )
+    }
+
     private fun showResult(context: Context, title: String, text: String) {
         ensureChannel(context)
         if (!canPostNotifications(context)) return
@@ -114,6 +135,20 @@ object SyncNotificationHelper {
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
             description = "Estado de subida de documentos pendientes"
+        }
+        manager.createNotificationChannel(channel)
+    }
+
+    private fun ensureAlertChannel(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val channel = NotificationChannel(
+            ALERT_CHANNEL_ID,
+            "Alertas de documentos",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply {
+            description = "Avisos sobre documentos rechazados o actualizaciones importantes"
         }
         manager.createNotificationChannel(channel)
     }

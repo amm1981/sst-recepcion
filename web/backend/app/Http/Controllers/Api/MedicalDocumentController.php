@@ -337,6 +337,19 @@ class MedicalDocumentController extends Controller
                 'from' => $from,
                 'to' => $data['status'],
             ]);
+
+            if ($data['status'] === MedicalDocument::STATUS_REJECTED) {
+                \App\Models\Notification::create([
+                    'user_id' => $medicalDocument->created_by,
+                    'title' => 'Documento rechazado',
+                    'body' => 'Su documento ' . ($medicalDocument->type?->name ?? 'medico') . ' fue rechazado. Motivo: ' . ($data['observation'] ?? 'Sin motivo registrado.'),
+                    'data' => [
+                        'type' => 'document_rejected',
+                        'document_id' => $medicalDocument->id,
+                        'reason' => $data['observation'] ?? null,
+                    ],
+                ]);
+            }
         });
 
         $this->sendRejectedReportIfNeeded($medicalDocument->fresh());

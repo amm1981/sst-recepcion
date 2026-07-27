@@ -98,7 +98,7 @@ private fun DocumentStatusContent(doc: DocumentUi, modifier: Modifier) {
             Text(visual.label, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
         Text(
-            statusMessage(doc.status),
+            statusMessage(doc),
             fontSize = 14.sp,
             color = Color.Gray,
             modifier = Modifier.padding(start = 24.dp, top = 4.dp)
@@ -156,6 +156,15 @@ private fun normalizedHistory(doc: DocumentUi): List<TimelineUi> {
     } else {
         completed + pendingSteps
     }
+}
+
+private fun statusMessage(doc: DocumentUi): String = when (doc.status) {
+    "RECEPCIONADO" -> "Su documento fue recepcionado por SST."
+    "REGISTRADO" -> "Su documento fue registrado en Genesys."
+    "RECHAZADO" -> doc.rejectionReason?.takeIf { it.isNotBlank() }
+        ?.let { "Su documento fue rechazado. Motivo: $it" }
+        ?: "Su documento fue rechazado. Revise la observacion."
+    else -> "Su documento esta en revision."
 }
 
 private fun statusMessage(status: String): String = when (status) {

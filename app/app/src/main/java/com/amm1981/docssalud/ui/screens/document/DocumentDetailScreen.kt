@@ -120,6 +120,10 @@ private fun DocumentDetailContent(
                 .clickable { onNavigateToStatus(doc.id) }
         )
 
+        if (doc.status == "RECHAZADO" && !doc.rejectionReason.isNullOrBlank()) {
+            RejectionReasonCard(reason = doc.rejectionReason)
+        }
+
         HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
         Text("Información", fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(bottom = 12.dp))
@@ -165,6 +169,23 @@ fun DetailRow(label: String, value: String) {
     Column(modifier = Modifier.padding(bottom = 12.dp)) {
         Text(label, fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
         Text(value.ifBlank { "-" }, fontSize = 16.sp, color = Color.Black)
+    }
+}
+
+@Composable
+private fun RejectionReasonCard(reason: String) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF1F0)),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text("Motivo de rechazo", color = Color(0xFFB42318), fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(reason, color = Color(0xFF7A271A), fontSize = 14.sp)
+        }
     }
 }
 

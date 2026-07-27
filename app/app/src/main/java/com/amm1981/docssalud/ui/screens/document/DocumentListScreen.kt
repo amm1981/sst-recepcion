@@ -421,6 +421,18 @@ private fun DocumentCard(
                 }
                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.Gray)
             }
+            if (doc.status == "RECHAZADO" && !doc.rejectionReason.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFFFFF1F0), RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                ) {
+                    Text("Motivo de rechazo", color = Color(0xFFB42318), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text(doc.rejectionReason, color = Color(0xFF7A271A), fontSize = 12.sp)
+                }
+            }
         }
     }
 }

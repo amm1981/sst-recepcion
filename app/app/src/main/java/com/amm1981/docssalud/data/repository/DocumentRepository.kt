@@ -11,6 +11,7 @@ import com.amm1981.docssalud.data.api.MedicalDocumentDto
 import com.amm1981.docssalud.data.api.RegistrarDto
 import com.amm1981.docssalud.data.local.dao.SyncQueueDao
 import com.amm1981.docssalud.data.local.entity.SyncQueueEntity
+import com.amm1981.docssalud.workers.SyncNotificationHelper
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -64,6 +65,7 @@ data class DocumentUi(
     val delivererName: String,
     val delivererDocument: String?,
     val observation: String?,
+    val rejectionReason: String?,
     val files: List<DocumentFileUi>,
     val history: List<DocumentHistoryUi>
 )
@@ -101,6 +103,7 @@ class DocumentRepository @Inject constructor(
         val ALLOWED_EXTENSIONS = setOf("docx", "pdf", "jpeg", "jpg", "png")
         val IMAGE_EXTENSIONS = setOf("jpeg", "jpg", "png")
         val DOCUMENT_JPEG_QUALITIES = intArrayOf(94, 92, 90, 88)
+        const val NOTIFIED_REJECTIONS_PREF = "notified_rejected_notifications"
     }
 
     suspend fun enqueueDocument(
@@ -297,6 +300,7 @@ class DocumentRepository @Inject constructor(
             }
             val remoteSyncedUuids = reconcileRemoteDocuments(remoteDtos)
             val remote = remoteDtos.map { it.toUi() }
+            checkRejectedNotifications()
 
             val local = if (status == "PENDIENTE") {
                 syncQueueDao.getByStatuses(listOf("PENDING", "FAILED"))
@@ -362,6 +366,7 @@ class DocumentRepository @Inject constructor(
             val response = api.getCounts()
             val remote = response.body()
             reconcilePendingDocuments()
+            checkRejectedNotifications()
             val localPending = syncQueueDao.countByStatuses(listOf("PENDING", "FAILED"))
             if (response.isSuccessful && remote != null) {
                 Result.success(
@@ -411,8 +416,41 @@ class DocumentRepository @Inject constructor(
         }.getOrDefault(false)
     }
 
+    private suspend fun checkRejectedNotifications() {
+        runCatching {
+            val response = api.getNotifications()
+            if (!response.isSuccessful) return
+
+            val prefs = context.getSharedPreferences("docssalud_notifications", Context.MODE_PRIVATE)
+            val notified = prefs.getStringSet(NOTIFIED_REJECTIONS_PREF, emptySet()).orEmpty().toMutableSet()
+            var changed = false
+
+            response.body().orEmpty()
+                .filter { notification ->
+                    notification.readAt == null &&
+                        notification.data?.get("type")?.asString == "document_rejected" &&
+                        notification.id.toString() !in notified
+                }
+                .forEach { notification ->
+                    SyncNotificationHelper.showDocumentRejected(
+                        context = context,
+                        notificationId = notification.id,
+                        title = notification.title,
+                        text = notification.body
+                    )
+                    notified.add(notification.id.toString())
+                    changed = true
+                }
+
+            if (changed) {
+                prefs.edit().putStringSet(NOTIFIED_REJECTIONS_PREF, notified).apply()
+            }
+        }
+    }
+
     private fun MedicalDocumentDto.toUi(): DocumentUi {
         val workerName = listOfNotNull(worker?.firstName, worker?.lastName).joinToString(" ").ifBlank { "Sin trabajador" }
+        val rejectedHistoryReason = history.orEmpty().firstOrNull { it.toStatus == "RECHAZADO" }?.observation
         return DocumentUi(
             id = id.toString(),
             isLocal = false,
@@ -429,6 +467,7 @@ class DocumentRepository @Inject constructor(
             delivererName = delivererName,
             delivererDocument = delivererDocument,
             observation = observation,
+            rejectionReason = rejectedHistoryReason ?: observation?.takeIf { status == "RECHAZADO" },
             files = files.orEmpty().map { DocumentFileUi(id = it.id, type = it.fileType, name = it.originalName) },
             history = history.orEmpty().map {
                 DocumentHistoryUi(
@@ -475,6 +514,7 @@ class DocumentRepository @Inject constructor(
             delivererName = delivererName,
             delivererDocument = delivererDocument,
             observation = observation,
+            rejectionReason = null,
             files = files,
             history = listOf(
                 DocumentHistoryUi(

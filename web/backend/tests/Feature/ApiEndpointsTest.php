@@ -483,6 +483,11 @@ class ApiEndpointsTest extends TestCase
             'to_status' => MedicalDocument::STATUS_REJECTED,
             'observation' => 'Documento ilegible.',
         ]);
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $document->created_by,
+            'title' => 'Documento rechazado',
+            'body' => 'Su documento Descanso Medico fue rechazado. Motivo: Documento ilegible.',
+        ]);
         Mail::assertSent(\App\Mail\RejectedDocumentsReport::class, fn ($mail) => $mail->hasTo('sst@example.com'));
 
         Carbon::setTestNow();
